@@ -26,6 +26,41 @@ def _avisar_columnas_sin_varianza(fact_publicaciones) -> list:
     return avisos
 
 
+def resumir_fact_publicaciones(fact_publicaciones) -> dict:
+    """Conteos y porcentajes de fact_publicaciones, como escalares.
+
+    print_metricas los derivaba del DataFrame completo, que por eso tenia que
+    viajar dentro del dict de metricas. Separarlo deja las metricas
+    serializables.
+    """
+    n = len(fact_publicaciones)
+    fp = fact_publicaciones
+
+    def _pct(cantidad):
+        return 100 * cantidad / n if n else 0.0
+
+    resumen = {"filas": n}
+    for columna, clave in [
+        ("precio_invalido", "precio_valido"),
+        ("km_invalido", "km_valido"),
+        ("anio_invalido", "anio_valido"),
+    ]:
+        cantidad = int((~fp[columna]).sum())
+        resumen[clave] = cantidad
+        resumen[clave + "_pct"] = _pct(cantidad)
+
+    for columna in ("precio_outlier", "km_outlier", "sin_atributos"):
+        cantidad = int(fp[columna].sum())
+        resumen[columna] = cantidad
+        resumen[columna + "_pct"] = _pct(cantidad)
+
+    resumen["nulls"] = {
+        columna: {"n": int(fp[columna].isna().sum()), "pct": _pct(int(fp[columna].isna().sum()))}
+        for columna in ("price_ars_limpio", "kilometros_limpio", "anio_limpio")
+    }
+    return resumen
+
+
 def run_asserts(tablas: dict) -> None:
     """Gate de integridad previo a escribir. Levanta ValidationError si algo falla.
 
@@ -102,14 +137,15 @@ def print_metricas(m: dict) -> None:
     print(f"  attributes.csv:     {m['attributes_filas']:,} filas leidas")
     print()
     print("Diagnostico de duplicados (results_base, antes de deduplicar):")
-    d = m["dup_diag"]
-    print(f"  Filas totales:                {d['filas_totales']:,}")
-    print(f"  id_publicacion unicos:        {d['avisos_unicos']:,}")
-    print(f"  Promedio capturas/aviso:      {d['promedio_capturas_por_aviso']:.1f}")
-    print(f"  Mediana capturas/aviso:       {d['mediana_capturas_por_aviso']:.0f}")
-    print(f"  Maximo capturas/aviso:        {d['max_capturas_por_aviso']}")
-    print(f"  Avisos con > 1 captura misma fecha: {d['avisos_con_duplicado_intra_dia']}")
-    print(f"  Ejemplos: {d['ejemplos_duplicado_intra_dia']}")
+    dd = m["dup_diag"]
+    print(f"  Filas totales:                {dd['filas_totales']:,}")
+    print(f"  id_publicacion unicos:        {dd['avisos_unicos']:,}")
+    print(f"  Promedio capturas/aviso:      {dd['promedio_capturas_por_aviso']:.1f}")
+    print(f"  Mediana capturas/aviso:       {dd['mediana_capturas_por_aviso']:.0f}")
+    print(f"  Maximo capturas/aviso:        {dd['max_capturas_por_aviso']}")
+    print(f"  Avisos con > 1 captura:       {dd['avisos_con_mas_de_1_captura']:,}")
+    print(f"  Avisos con > 1 captura misma fecha: {dd['avisos_con_duplicado_intra_dia']}")
+    print(f"  Ejemplos: {dd['ejemplos_duplicado_intra_dia']}")
     print()
     print("Capa 1 - precio (piso + techo dinamico global):")
     p = m["precio_diag"]
@@ -126,22 +162,28 @@ def print_metricas(m: dict) -> None:
     print(f"  km_outlier:     {o['km_outlier']['filas_marcadas']:,} filas marcadas "
           f"({o['km_outlier']['grupos_sin_muestra_minima']} de {o['km_outlier']['grupos_total']} "
           f"grupos sin muestra minima)")
+    p2 = o["precio_outlier"]
+    print(f"  filas por tier (precio): modelo_anio {p2['tier_modelo_anio_filas']:,} / "
+          f"global {p2['tier_global_filas']:,} "
+          f"(sin grupo {p2['tier_global_por_sin_grupo']:,} + "
+          f"muestra chica {p2['tier_global_por_muestra_chica']:,})")
+    if p2["fence_global_upper"] is not None:
+        print(f"  fence global (precio):   [{p2['fence_global_lower']:,.0f} .. "
+              f"{p2['fence_global_upper']:,.0f}] ARS")
     print()
-    fp = m["fact_publicaciones"]
-    n = len(fp)
-    print(f"fact_publicaciones: {n:,} filas")
-    print(f"  - con precio valido:     {(~fp['precio_invalido']).sum():,} ({100*(~fp['precio_invalido']).mean():.1f}%)")
-    print(f"  - con km valido:         {(~fp['km_invalido']).sum():,} ({100*(~fp['km_invalido']).mean():.1f}%)")
-    print(f"  - con anio valido:       {(~fp['anio_invalido']).sum():,} ({100*(~fp['anio_invalido']).mean():.1f}%)")
-    print(f"  - outliers precio (IQR): {fp['precio_outlier'].sum():,} ({100*fp['precio_outlier'].mean():.1f}%)")
-    print(f"  - outliers km (IQR):     {fp['km_outlier'].sum():,} ({100*fp['km_outlier'].mean():.1f}%)")
-    print(f"  - sin atributos:         {fp['sin_atributos'].sum():,} ({100*fp['sin_atributos'].mean():.1f}%)")
+    d = m["fact_diag"]
+    print(f"fact_publicaciones: {d['filas']:,} filas")
+    print(f"  - con precio valido:     {d['precio_valido']:,} ({d['precio_valido_pct']:.1f}%)")
+    print(f"  - con km valido:         {d['km_valido']:,} ({d['km_valido_pct']:.1f}%)")
+    print(f"  - con anio valido:       {d['anio_valido']:,} ({d['anio_valido_pct']:.1f}%)")
+    print(f"  - outliers precio (IQR): {d['precio_outlier']:,} ({d['precio_outlier_pct']:.1f}%)")
+    print(f"  - outliers km (IQR):     {d['km_outlier']:,} ({d['km_outlier_pct']:.1f}%)")
+    print(f"  - sin atributos:         {d['sin_atributos']:,} ({d['sin_atributos_pct']:.1f}%)")
     print(f"fact_precios_historicos:   {m['fact_precios_historicos_filas']:,} filas")
     print()
     print("Columnas limpias (nulls = invalido capa 1 OR outlier capa 2):")
-    for col in ["price_ars_limpio", "kilometros_limpio", "anio_limpio"]:
-        n_nulos = fp[col].isna().sum()
-        print(f"  {col}: {n_nulos:,} ({100*n_nulos/n:.1f}%)")
+    for col, v in d["nulls"].items():
+        print(f"  {col}: {v['n']:,} ({v['pct']:.1f}%)")
     print()
     t = m["tendencias_counts"]
     total_t = sum(t.values())
@@ -168,5 +210,6 @@ def print_metricas(m: dict) -> None:
     print(f"FX al {m['fx']['fecha_fx']}:")
     print(f"  Oficial: ${m['fx']['usd_oficial']:.2f}")
     print(f"  Blue:    ${m['fx']['usd_blue']:.2f}")
+    print(f"  Fuente:  {m['fx']['fuente']}")
     print()
     print(f"Duracion: {m['duracion_segundos']:.1f} segundos")

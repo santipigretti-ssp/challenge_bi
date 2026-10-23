@@ -1,26 +1,34 @@
 import logging
 import time
+from dataclasses import dataclass, field
 
-from etl import config, dimensions, extract, fx, load, outliers, tendencias, transform_attrs, transform_results, validate
+import pandas as pd
+
+from etl import (
+    config, dimensions, extract, fx, load, outliers, schemas,
+    tendencias, transform_attrs, transform_results, validate,
+)
 
 logger = logging.getLogger(__name__)
 
-FACT_PUBLICACIONES_COLUMNAS = [
-    "id_publicacion", "title", "permalink", "condition", "currency_id", "category_id",
-    "listing_type_id", "accepts_mercadopago", "stop_time", "fecha_pub",
-    "price", "price_ars", "price_ars_limpio",
-    "price_usd_oficial", "price_usd_oficial_limpio", "price_usd_blue", "price_usd_blue_limpio",
-    "precio_invalido", "precio_outlier",
-    "id_marca", "marca", "id_modelo", "modelo", "id_transmision", "transmision",
-    "anio", "anio_limpio", "kilometros", "kilometros_limpio", "version",
-    "km_invalido", "anio_invalido", "km_outlier",
-    "rango_km", "orden_rango_km", "sin_atributos",
-]
+# El contrato de columnas vive en etl/schemas.py, que es lo que leen tambien
+# el verificador de load, validate y el generador del diccionario de datos.
+# Se re-exportan por compatibilidad con quien importe desde main.
+FACT_PUBLICACIONES_COLUMNAS = schemas.FACT_PUBLICACIONES_COLUMNAS
+FACT_PRECIOS_HISTORICOS_COLUMNAS = schemas.FACT_PRECIOS_HISTORICOS_COLUMNAS
 
-FACT_PRECIOS_HISTORICOS_COLUMNAS = [
-    "id_publicacion", "fecha_captura", "__KEY_results",
-    "price", "currency_id", "price_ars", "price_ars_limpio", "precio_invalido", "precio_outlier",
-]
+
+@dataclass
+class ResultadoCorrida:
+    """Salida de run(): las tablas por un lado, las metricas por el otro.
+
+    Antes run() devolvia un unico dict de "metricas" que traia adentro el
+    DataFrame completo de fact_publicaciones (~3 MB) solo para que
+    print_metricas y el test de integracion pudieran alcanzarlo. Ahora
+    metricas son escalares serializables y las tablas se piden por su nombre.
+    """
+    tablas: dict = field(default_factory=dict)
+    metricas: dict = field(default_factory=dict)
 
 
 def setup_logging() -> None:
@@ -43,7 +51,7 @@ def setup_logging() -> None:
         )
 
 
-def run() -> dict:
+def run() -> ResultadoCorrida:
     setup_logging()
     t0 = time.time()
     logger.info("===== corrida: dataset=%s =====", config.DATASET)
@@ -80,9 +88,9 @@ def run() -> dict:
     fact_publicaciones = transform_results.agregar_rango_km(fact_publicaciones)
     fact_publicaciones = transform_results.dolarizar(fact_publicaciones, fx_dict["usd_oficial"], fx_dict["usd_blue"])
     fact_publicaciones = fact_publicaciones.rename(columns={"fecha_captura": "fecha_pub"})
-    fact_publicaciones = fact_publicaciones[FACT_PUBLICACIONES_COLUMNAS]
+    fact_publicaciones = fact_publicaciones[schemas.FACT_PUBLICACIONES_COLUMNAS]
 
-    fact_precios_historicos = df_base[FACT_PRECIOS_HISTORICOS_COLUMNAS].copy()
+    fact_precios_historicos = df_base[schemas.FACT_PRECIOS_HISTORICOS_COLUMNAS].copy()
 
     # Se le pasa df_base, no fact_precios_historicos: son las mismas filas,
     # pero df_base todavia tiene las claves numericas de orden que definen cual
@@ -107,29 +115,29 @@ def run() -> dict:
 
     validate.run_asserts(tablas)
 
-    duracion = time.time() - t0
     metricas = {
         "results_filas": len(df_results),
         "attributes_filas": len(df_attrs),
         "dup_diag": dup_diag,
         "precio_diag": diag_precio,
         "outliers_diag": outliers_diag,
-        "fact_publicaciones": fact_publicaciones,
+        "fact_diag": validate.resumir_fact_publicaciones(fact_publicaciones),
         "fact_precios_historicos_filas": len(fact_precios_historicos),
         "tendencias_counts": tabla_tendencias["tendencia_precio"].value_counts().to_dict(),
         "marcas_unicas": len(dims["dim_marca"]),
         "modelos_unicos": len(dims["dim_modelo"]),
         "transmisiones_unicas": len(dims["dim_transmision"]),
-        "fecha_min": fecha_min,
-        "fecha_max": fecha_max,
+        "fecha_min": str(fecha_min),
+        "fecha_max": str(fecha_max),
         "fx": fx_dict,
-        "duracion_segundos": duracion,
+        "duracion_segundos": round(time.time() - t0, 2),
     }
     validate.print_metricas(metricas)
 
-    load.escribir_csvs(tablas)
+    manifest = load.escribir_csvs(tablas, extra_manifest={"fx": fx_dict})
+    metricas["manifest"] = manifest
 
-    return metricas
+    return ResultadoCorrida(tablas=tablas, metricas=metricas)
 
 
 if __name__ == "__main__":

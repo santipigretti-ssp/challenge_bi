@@ -22,7 +22,9 @@ def _tablas_validas():
         "dim_marca": pd.DataFrame({"id_marca": ["M1"], "marca": ["Volkswagen"]}),
         "dim_modelo": pd.DataFrame({"id_modelo": ["MO1"], "modelo": ["Vento"]}),
         "dim_transmision": pd.DataFrame({"id_transmision": ["T1"], "transmision": ["Manual"]}),
-        "dim_FX": pd.DataFrame([{"fecha_fx": "2015-11-30", "usd_oficial": 10.0, "usd_blue": 15.0}]),
+        "dim_FX": pd.DataFrame([{
+            "fecha_fx": "2015-11-30", "usd_oficial": 10.0, "usd_blue": 15.0, "fuente_fx": "api",
+        }]),
     }
 
 
@@ -78,7 +80,9 @@ def test_detecta_dim_fx_con_cantidad_de_filas_incorrecta(filas):
 
 def test_detecta_fx_nulo():
     t = _tablas_validas()
-    t["dim_FX"] = pd.DataFrame([{"fecha_fx": "2015-11-30", "usd_oficial": None, "usd_blue": 15.0}])
+    t["dim_FX"] = pd.DataFrame([{
+        "fecha_fx": "2015-11-30", "usd_oficial": None, "usd_blue": 15.0, "fuente_fx": "api",
+    }])
     with pytest.raises(ValidationError, match="usd_oficial es null"):
         validate.run_asserts(t)
 
@@ -137,6 +141,43 @@ def test_no_avisa_si_todas_las_columnas_tienen_varianza(caplog):
     assert "sin varianza" not in caplog.text
 
 
+# --- resumir_fact_publicaciones ---
+
+def _fact_de_ejemplo():
+    return pd.DataFrame({
+        "precio_invalido": [False, True, False, False],
+        "km_invalido": [False, False, True, False],
+        "anio_invalido": [False, False, False, True],
+        "precio_outlier": [False, False, True, False],
+        "km_outlier": [True, False, False, False],
+        "sin_atributos": [False, False, False, True],
+        "price_ars_limpio": [1.0, None, None, 4.0],
+        "kilometros_limpio": [None, 2.0, None, 4.0],
+        "anio_limpio": [1.0, 2.0, 3.0, None],
+    })
+
+
+def test_resumir_devuelve_solo_escalares():
+    """El DataFrame ya no viaja dentro de las metricas."""
+    resumen = validate.resumir_fact_publicaciones(_fact_de_ejemplo())
+
+    assert resumen["filas"] == 4
+    assert resumen["precio_valido"] == 3
+    assert resumen["precio_valido_pct"] == pytest.approx(75.0)
+    assert resumen["sin_atributos"] == 1
+    assert resumen["nulls"]["price_ars_limpio"]["n"] == 2
+    assert resumen["nulls"]["price_ars_limpio"]["pct"] == pytest.approx(50.0)
+
+    assert not any(isinstance(v, (pd.DataFrame, pd.Series)) for v in resumen.values())
+
+
+def test_resumir_no_divide_por_cero_con_tabla_vacia():
+    resumen = validate.resumir_fact_publicaciones(_fact_de_ejemplo().iloc[:0])
+
+    assert resumen["filas"] == 0
+    assert resumen["precio_valido_pct"] == 0.0
+
+
 # --- print_metricas ---
 
 def _metricas_minimas(tendencias_counts):
@@ -155,24 +196,20 @@ def _metricas_minimas(tendencias_counts):
         "outliers_diag": {
             flag: {
                 "grupos_total": 2, "grupos_sin_muestra_minima": 1, "filas_marcadas": 1,
-                "tier_modelo_anio_filas": 5, "tier_global_filas": 0,
-                "tier_global_por_sin_grupo": 0, "tier_global_por_muestra_chica": 0,
-                "fence_global_lower": None, "fence_global_upper": None,
+                "tier_modelo_anio_filas": 5, "tier_global_filas": 3,
+                "tier_global_por_sin_grupo": 2, "tier_global_por_muestra_chica": 1,
+                "fence_global_lower": -100.0, "fence_global_upper": 500_000.0,
             }
             for flag in ("precio_outlier", "km_outlier")
         },
-        "fact_publicaciones": pd.DataFrame({
-            "precio_invalido": [False, True], "km_invalido": [False, False],
-            "anio_invalido": [False, False], "precio_outlier": [False, False],
-            "km_outlier": [False, False], "sin_atributos": [False, True],
-            "price_ars_limpio": [1.0, None], "kilometros_limpio": [1.0, None],
-            "anio_limpio": [2015.0, None],
-        }),
+        "fact_diag": validate.resumir_fact_publicaciones(_fact_de_ejemplo()),
         "fact_precios_historicos_filas": 10,
         "tendencias_counts": tendencias_counts,
         "marcas_unicas": 1, "modelos_unicos": 1, "transmisiones_unicas": 1,
         "fecha_min": "2015-10-10", "fecha_max": "2015-12-21",
-        "fx": {"fecha_fx": "2015-11-30", "usd_oficial": 10.0, "usd_blue": 15.0},
+        "fx": {
+            "fecha_fx": "2015-11-30", "usd_oficial": 10.0, "usd_blue": 15.0, "fuente": "override",
+        },
         "duracion_segundos": 1.0,
     }
 
@@ -192,3 +229,17 @@ def test_print_metricas_no_revienta_con_tabla_vacia(capsys):
     """Antes: ZeroDivisionError al dividir por la suma de los conteos."""
     validate.print_metricas(_metricas_minimas({}))
     assert "sin avisos" in capsys.readouterr().out
+
+
+def test_print_metricas_muestra_la_fuente_del_fx(capsys):
+    """El linaje del tipo de cambio tiene que ser visible en el reporte."""
+    validate.print_metricas(_metricas_minimas({"Estable": 1}))
+    assert "override" in capsys.readouterr().out
+
+
+def test_print_metricas_muestra_los_tiers_y_el_fence(capsys):
+    validate.print_metricas(_metricas_minimas({"Estable": 1}))
+    salida = capsys.readouterr().out
+
+    assert "modelo_anio" in salida
+    assert "fence global" in salida

@@ -30,9 +30,10 @@ ARCHIVOS_ESPERADOS = [
 
 
 def test_pipeline_corre_y_escribe_las_ocho_tablas(fx_fijo):
-    metricas = main.run()
+    resultado = main.run()
+    metricas = resultado.metricas
 
-    fp = metricas["fact_publicaciones"]
+    fp = resultado.tablas["fact_publicaciones"]
     assert len(fp) == AVISOS_FIXTURE
     assert fp["id_publicacion"].is_unique
     assert metricas["fact_precios_historicos_filas"] == CAPTURAS_FIXTURE
@@ -44,8 +45,9 @@ def test_pipeline_corre_y_escribe_las_ocho_tablas(fx_fijo):
 
 
 def test_pipeline_ejercita_las_dos_capas_de_outliers(fx_fijo):
-    metricas = main.run()
-    fp = metricas["fact_publicaciones"]
+    resultado = main.run()
+    metricas = resultado.metricas
+    fp = resultado.tablas["fact_publicaciones"]
     diag = metricas["outliers_diag"]
 
     # Capa 1
@@ -64,7 +66,7 @@ def test_pipeline_ejercita_las_dos_capas_de_outliers(fx_fijo):
 
 def test_pipeline_conserva_los_avisos_sin_atributos(fx_fijo):
     """Los avisos sin Marca/Modelo/Anio/Km quedan, con nulls y el flag prendido."""
-    fp = main.run()["fact_publicaciones"]
+    fp = main.run().tablas["fact_publicaciones"]
     sin_attrs = fp[fp["sin_atributos"]]
 
     assert len(sin_attrs) > 0
@@ -79,8 +81,9 @@ def test_pipeline_conserva_los_avisos_sin_atributos(fx_fijo):
 def test_los_avisos_sin_atributos_si_pueden_ser_outliers(fx_fijo):
     """Antes no podian serlo por construccion, y los precios extremos del
     dataset entraban limpios a price_ars_limpio. Ver etl.outliers._flag_outliers."""
-    metricas = main.run()
-    fp = metricas["fact_publicaciones"]
+    resultado = main.run()
+    metricas = resultado.metricas
+    fp = resultado.tablas["fact_publicaciones"]
     diag = metricas["outliers_diag"]["precio_outlier"]
 
     sin_attrs = fp[fp["sin_atributos"]]
@@ -99,18 +102,18 @@ def test_los_avisos_sin_atributos_si_pueden_ser_outliers(fx_fijo):
 
 
 def test_km_no_tiene_tier_global(fx_fijo):
-    diag = main.run()["outliers_diag"]["km_outlier"]
+    diag = main.run().metricas["outliers_diag"]["km_outlier"]
     assert diag["fence_global_upper"] is None
     assert diag["tier_global_filas"] == 0
 
 
 def test_pipeline_cubre_todos_los_avisos_en_tendencias(fx_fijo):
-    metricas = main.run()
-    fp = metricas["fact_publicaciones"]
-    total = sum(metricas["tendencias_counts"].values())
+    resultado = main.run()
+    fp = resultado.tablas["fact_publicaciones"]
+    total = sum(resultado.metricas["tendencias_counts"].values())
 
     assert total == len(fp)
-    assert metricas["tendencias_counts"].get("Sin precio", 0) > 0
+    assert resultado.metricas["tendencias_counts"].get("Sin precio", 0) > 0
 
 
 def test_pipeline_usa_el_fixture_no_el_dataset_completo(fx_fijo):
@@ -172,3 +175,35 @@ def test_ningun_modulo_de_transformacion_lee_el_reloj():
                     culpables.append("{}: {}".format(modulo.name, patron))
     assert not culpables, \
         "lecturas del reloj que vuelven la salida no reproducible: {}".format(culpables)
+
+
+def test_las_metricas_son_serializables(fx_fijo):
+    """Antes el dict de metricas traia adentro el DataFrame de fact_publicaciones."""
+    import json
+
+    metricas = main.run().metricas
+
+    for clave, valor in metricas.items():
+        assert not isinstance(valor, (pd.DataFrame, pd.Series)), \
+            "metricas['{}'] es un {}".format(clave, type(valor).__name__)
+    json.dumps(metricas, default=str)
+
+
+def test_el_manifest_registra_las_ocho_tablas(fx_fijo):
+    from etl import load as etl_load
+
+    manifest = main.run().metricas["manifest"]
+
+    assert set(manifest["tablas"]) == {n.removesuffix(".csv") for n in ARCHIVOS_ESPERADOS}
+    assert manifest["dataset"] == "fixture"
+    assert manifest["fx"]["fuente"] == "override"
+    assert (config.PROCESSED_DIR / etl_load.MANIFEST).exists()
+
+
+def test_dos_corridas_dan_el_mismo_sha256(fx_fijo):
+    """La version verificable de la reproducibilidad."""
+    primera = main.run().metricas["manifest"]["tablas"]
+    segunda = main.run().metricas["manifest"]["tablas"]
+
+    distintos = [n for n in primera if primera[n]["sha256"] != segunda[n]["sha256"]]
+    assert not distintos, "no reproducible: {}".format(distintos)
