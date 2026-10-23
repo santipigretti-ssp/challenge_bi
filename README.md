@@ -12,6 +12,16 @@ Treating a capture as a listing inflates every count by ~19x and makes every ave
 meaningless. Everything below follows from getting that grain right while keeping the price
 history, which is where the interesting signal lives.
 
+## The dashboard this feeds
+
+![Power BI dashboard](docs/img/dashboard.png)
+
+Single page: listing explorer with cross-filtering, a currency toggle (ARS / USD official / USD
+blue) driven by a disconnected selector table, and a price-history sparkline for the selected
+listing. The `.pbix` itself is not in this repo — see
+[Power BI](#power-bi) below.
+
+
 | | |
 |---|---|
 | **Input** | 124,511 capture rows × 662,469 attribute rows (~100 MB, 2 CSVs) |
@@ -306,6 +316,20 @@ docs/
 
 Raw inputs are **not** in the repo: `etl/config.py` reads them from `../CSVs/`. There is no
 `data/raw/` on purpose — an empty one next to that config would be misleading.
+
+---
+
+## Power BI
+
+The report is built on the eight CSVs this pipeline writes. It is **not** committed here yet: a
+`.pbix` is a binary blob that git cannot diff, and it grows the repo by its full size on every
+save. The useful artifact is the **PBIP** project format, which stores the semantic model and the
+report definition as TMDL/JSON text — measures, relationships and column types all readable and
+diffable. Saving it that way (`File → Save as → Power BI project`) is the intended next step.
+
+One caveat when that lands: PBIP stores **absolute paths** to the CSV files, so a clone cannot
+refresh without editing them. A Power Query parameter for the folder is the fix.
+
 
 ---
 
