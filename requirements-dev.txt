@@ -1,0 +1,5 @@
+-r requirements.txt
+pytest==8.4.2
+# Solo para notebooks/diagnostico.ipynb — no los necesita el ETL ni los tests.
+matplotlib>=3.9,<4
+jupyter>=1.1,<2
