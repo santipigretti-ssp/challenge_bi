@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from etl import tendencias
+from etl import tendencias, transform_results
 
 
 # --- clasificar_tendencia ---
@@ -65,11 +65,17 @@ def test_orden_tendencia_cubre_todas_las_etiquetas():
 # --- build_tabla_tendencias ---
 
 def _historico(filas):
-    return pd.DataFrame(
+    """Historico de precios con las claves numericas de orden ya parseadas.
+
+    Pasa por agregar_claves_orden a proposito, para que el test ejercite el
+    mismo orden que usa el pipeline en vez de uno propio.
+    """
+    df = pd.DataFrame(
         filas,
         columns=["id_publicacion", "fecha_captura", "__KEY_results",
                  "price_ars", "precio_invalido", "precio_outlier"],
     )
+    return transform_results.agregar_claves_orden(df)
 
 
 def test_build_tabla_tendencias_toma_primero_y_ultimo_por_fecha():

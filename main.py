@@ -68,8 +68,11 @@ def run() -> dict:
 
     fact_precios_historicos = df_base[FACT_PRECIOS_HISTORICOS_COLUMNAS].copy()
 
+    # Se le pasa df_base, no fact_precios_historicos: son las mismas filas,
+    # pero df_base todavia tiene las claves numericas de orden que definen cual
+    # captura es precio_ini y cual precio_fin.
     tabla_tendencias = tendencias.build_tabla_tendencias(
-        fact_precios_historicos, fact_publicaciones["id_publicacion"]
+        df_base, fact_publicaciones["id_publicacion"]
     )
 
     dim_fecha = dimensions.build_dim_fecha(fecha_min, fecha_max)

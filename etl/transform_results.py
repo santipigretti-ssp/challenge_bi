@@ -16,11 +16,52 @@ def _serial_a_fecha(key_results: pd.Series) -> pd.Series:
     return EXCEL_EPOCH + pd.to_timedelta(serial, unit="D")
 
 
+# __KEY_results tiene la forma {serial}-{offset}-{categoria}-{indice},
+# p.ej. 42316-0-MLA29483-200. Los tres campos numericos ordenan las capturas.
+CLAVES_ORDEN = ["_k_serial", "_k_offset", "_k_indice"]
+_CAMPOS_NUMERICOS = {"_k_serial": 0, "_k_offset": 1, "_k_indice": 3}
+
+
+def agregar_claves_orden(df: pd.DataFrame) -> pd.DataFrame:
+    """Parsea __KEY_results a columnas numericas de orden.
+
+    Ordenar __KEY_results como string es incorrecto: el offset toma los valores
+    {0, 200, 400, 600, 800, 1000, 1200, 1400}, con distinta cantidad de
+    digitos, asi que lexicograficamente '800' > '1400' y la captura de las 8
+    ganaria sobre la de las 14 del mismo dia. En este dataset no muerde (de los
+    10 duplicados intra-dia reales, los 10 resuelven igual con string que con
+    numero, porque ningun par mezcla cantidades de digitos), pero un re-scrape
+    elegiria la captura equivocada en silencio.
+
+    Las columnas son privadas (prefijo _) y ninguna tabla de salida las lista,
+    asi que no llegan a los CSVs.
+    """
+    df = df.copy()
+    partes = df["__KEY_results"].str.split("-", expand=True)
+    if partes.shape[1] != 4:
+        raise ValueError(
+            "__KEY_results deberia tener 4 campos separados por '-', "
+            "se encontraron {}. Ejemplo: {!r}".format(partes.shape[1], df["__KEY_results"].iloc[0])
+        )
+
+    for columna, campo in _CAMPOS_NUMERICOS.items():
+        valores = pd.to_numeric(partes[campo], errors="coerce")
+        if valores.isna().any():
+            malformadas = df.loc[valores.isna(), "__KEY_results"].head(3).tolist()
+            raise ValueError(
+                "campo {} de __KEY_results no es numerico en {} filas. Ejemplos: {}".format(
+                    campo, int(valores.isna().sum()), malformadas
+                )
+            )
+        df[columna] = valores.astype("int64")
+    return df
+
+
 def parse_basico(df_results: pd.DataFrame) -> pd.DataFrame:
     df = df_results.rename(columns={"id_u9": "id_publicacion"}).copy()
     df["stop_time"] = pd.to_datetime(df["stop_time"], format=config.STOP_TIME_FORMAT)
     df["fecha_captura"] = _serial_a_fecha(df["__KEY_results"]).dt.date
-    return df
+    return agregar_claves_orden(df)
 
 
 def calcular_price_ars(df: pd.DataFrame, fx_blue: float) -> pd.DataFrame:
@@ -74,10 +115,14 @@ def calcular_precio_invalido(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
 def deduplicar_por_aviso(df: pd.DataFrame) -> pd.DataFrame:
     """Criterio determinístico de dedup (sección 5.6 del documento de diseño).
 
+    Gana la captura mas reciente: fecha, y dentro del dia el offset y el indice
+    mas altos. El orden sale de las claves numericas, no del string
+    __KEY_results (ver agregar_claves_orden).
+
     Se usa tanto para elegir la captura ganadora de atributos (antes de
     pivotear) como para construir el snapshot final de fact_publicaciones.
     """
-    df_sorted = df.sort_values(["fecha_captura", "__KEY_results"], ascending=[False, False])
+    df_sorted = df.sort_values(["fecha_captura"] + CLAVES_ORDEN, ascending=False)
     return df_sorted.drop_duplicates(subset=["id_publicacion"], keep="first")
 
 

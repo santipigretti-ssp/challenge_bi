@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from etl import config
+from etl import config, transform_results
 
 SIN_PRECIO = "Sin precio"
 OBSERVACION_UNICA = "Observación única"
@@ -50,13 +50,22 @@ def clasificar_tendencia(precio_ini, precio_fin, obs_validas, umbral: float = co
     return SUBIO if variacion > 0 else BAJO
 
 
-def build_tabla_tendencias(fact_precios_historicos: pd.DataFrame, ids_publicacion: pd.Series) -> pd.DataFrame:
-    """Tendencias calculadas sobre fact_precios_historicos, excluyendo tanto
+def build_tabla_tendencias(historico: pd.DataFrame, ids_publicacion: pd.Series) -> pd.DataFrame:
+    """Tendencias calculadas sobre el historico de precios, excluyendo tanto
     precio_invalido (capa 1) como precio_outlier (capa 2) — ver sección 2.2 del plan.
+
+    Recibe el frame previo a la seleccion de columnas de
+    fact_precios_historicos (mismas filas), porque necesita las claves
+    numericas de orden. De paso saca el acoplamiento entre el esquema de salida
+    y este calculo.
+
+    El orden define cual captura es precio_ini y cual precio_fin, o sea que
+    alimenta directo el KPI de tendencia: se ordena por las claves numericas,
+    no por el string __KEY_results (ver transform_results.agregar_claves_orden).
     """
-    validos = fact_precios_historicos.loc[
-        ~fact_precios_historicos["precio_invalido"] & ~fact_precios_historicos["precio_outlier"]
-    ].sort_values(["id_publicacion", "fecha_captura", "__KEY_results"])
+    validos = historico.loc[
+        ~historico["precio_invalido"] & ~historico["precio_outlier"]
+    ].sort_values(["id_publicacion", "fecha_captura"] + transform_results.CLAVES_ORDEN)
 
     grupos = validos.groupby("id_publicacion")
     obs_validas = grupos.size().rename("obs_validas")

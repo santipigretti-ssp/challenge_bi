@@ -62,21 +62,85 @@ def test_calcular_precio_invalido_piso_por_moneda():
 
 # --- deduplicar_por_aviso ---
 
-def test_deduplicar_por_aviso_gana_la_fecha_mas_reciente():
+def _con_claves(id_pubs, fechas, claves, **extra):
     df = pd.DataFrame({
-        "id_publicacion": ["A", "A", "A", "B"],
-        "fecha_captura": [pd.Timestamp("2015-12-01").date(), pd.Timestamp("2015-12-05").date(),
-                          pd.Timestamp("2015-12-05").date(), pd.Timestamp("2015-11-01").date()],
-        "__KEY_results": ["42000-0-MLA-1", "42004-0-MLA-1", "42004-200-MLA-1", "41970-0-MLA-1"],
-        "valor": [1, 2, 3, 4],
+        "id_publicacion": id_pubs,
+        "fecha_captura": [pd.Timestamp(f).date() for f in fechas],
+        "__KEY_results": claves,
+        **extra,
     })
+    return transform_results.agregar_claves_orden(df)
+
+
+def test_deduplicar_por_aviso_gana_la_fecha_mas_reciente():
+    df = _con_claves(
+        ["A", "A", "A", "B"],
+        ["2015-12-01", "2015-12-05", "2015-12-05", "2015-11-01"],
+        ["42000-0-MLA29483-1", "42004-0-MLA29483-1", "42004-200-MLA29483-1", "41970-0-MLA29483-1"],
+        valor=[1, 2, 3, 4],
+    )
     resultado = transform_results.deduplicar_por_aviso(df)
 
     fila_a = resultado.loc[resultado["id_publicacion"] == "A"].iloc[0]
     assert fila_a["fecha_captura"] == pd.Timestamp("2015-12-05").date()
     # Dentro de la misma fecha gana la captura mas tardia del dia (offset 200 > 0).
-    assert fila_a["__KEY_results"] == "42004-200-MLA-1"
+    assert fila_a["__KEY_results"] == "42004-200-MLA29483-1"
     assert len(resultado) == 2
+
+
+def test_deduplicar_ordena_el_offset_como_numero_no_como_string():
+    """El caso que el orden lexicografico erraba.
+
+    El offset toma valores {0, 200, ..., 1400} con distinta cantidad de
+    digitos, asi que como string '800' > '1400' y ganaba la captura de las 8
+    sobre la de las 14 del mismo dia.
+    """
+    df = _con_claves(
+        ["A", "A"],
+        ["2015-12-05", "2015-12-05"],
+        ["42004-800-MLA29483-1", "42004-1400-MLA29483-1"],
+    )
+    resultado = transform_results.deduplicar_por_aviso(df)
+
+    assert len(resultado) == 1
+    assert resultado.iloc[0]["__KEY_results"] == "42004-1400-MLA29483-1"
+
+
+def test_deduplicar_desempata_por_indice_cuando_el_offset_empata():
+    df = _con_claves(
+        ["A", "A"],
+        ["2015-12-05", "2015-12-05"],
+        ["42004-200-MLA29483-9", "42004-200-MLA29483-113"],
+    )
+    resultado = transform_results.deduplicar_por_aviso(df)
+
+    assert resultado.iloc[0]["__KEY_results"] == "42004-200-MLA29483-113"
+
+
+# --- agregar_claves_orden ---
+
+def test_agregar_claves_orden_parsea_los_tres_campos_numericos():
+    df = pd.DataFrame({"__KEY_results": ["42316-1200-MLA29483-200"]})
+    out = transform_results.agregar_claves_orden(df)
+
+    assert out.iloc[0]["_k_serial"] == 42316
+    assert out.iloc[0]["_k_offset"] == 1200
+    assert out.iloc[0]["_k_indice"] == 200
+    assert all(out[c].dtype == "int64" for c in transform_results.CLAVES_ORDEN)
+
+
+@pytest.mark.parametrize("clave", ["42316-0-MLA29483", "42316-0", "42316-0-MLA29483-1-extra"])
+def test_agregar_claves_orden_rechaza_claves_con_otra_forma(clave):
+    """Una clave malformada no puede degradar en silencio a orden de string."""
+    with pytest.raises(ValueError, match="4 campos"):
+        transform_results.agregar_claves_orden(pd.DataFrame({"__KEY_results": [clave]}))
+
+
+def test_agregar_claves_orden_rechaza_campos_no_numericos():
+    with pytest.raises(ValueError, match="no es numerico"):
+        transform_results.agregar_claves_orden(
+            pd.DataFrame({"__KEY_results": ["42316-xx-MLA29483-1"]})
+        )
 
 
 # --- dolarizar ---
