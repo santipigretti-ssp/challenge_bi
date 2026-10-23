@@ -1,0 +1,8 @@
+# Solo para regenerar notebooks/diagnostico.ipynb. No hace falta para correr el
+# ETL ni los tests: el notebook se commitea con las salidas ya renderizadas.
+# Aparte de requirements-dev.txt para que CI no arrastre todo Jupyter.
+-r requirements.txt
+matplotlib>=3.9,<4
+nbformat>=5.10,<6
+nbconvert>=7.16,<8
+ipykernel>=6.29,<8

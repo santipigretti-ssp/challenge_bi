@@ -112,8 +112,12 @@ period rather than a daily series.
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
-pytest                            # 170 tests, ~8 s, no network
+pytest                            # 170 tests, ~10 s, no network
 ```
+
+`requirements-dev.txt` is deliberately small (pandas, numpy, requests, pytest) so CI stays
+fast. The notebook's dependencies live in `requirements-notebook.txt` and are only needed to
+*regenerate* it — it is committed with its outputs rendered.
 
 Tests run against `tests/fixtures/` — a stratified 1.5 MB sample committed to the repo. **A fresh
 clone is fully testable**, which is why the fixture exists at all.
