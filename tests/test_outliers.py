@@ -249,3 +249,21 @@ def test_cuartiles_por_aviso_no_se_dejan_dominar_por_un_aviso_muy_capturado():
 
 def test_colapsar_por_aviso_esta_activo_por_defecto():
     assert config.IQR_COLAPSAR_POR_AVISO is True
+
+
+# --- Precondiciones ---
+
+def test_aplicar_outliers_falla_si_falta_una_columna():
+    from etl.errors import ValidationError
+
+    df = pd.DataFrame({"id_publicacion": ["A"], "price_ars": [100.0]})
+    with pytest.raises(ValidationError, match="aplicar_outliers"):
+        outliers.aplicar_outliers(df, anio_max=2016)
+
+
+def test_agregar_columnas_limpias_falla_si_falta_un_flag():
+    from etl.errors import ValidationError
+
+    df = pd.DataFrame({"price_ars": [100.0], "precio_invalido": [False]})
+    with pytest.raises(ValidationError, match="precio_outlier"):
+        outliers.agregar_columnas_limpias(df)

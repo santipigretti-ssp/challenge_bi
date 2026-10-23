@@ -3,6 +3,7 @@ import logging
 import pandas as pd
 
 from etl import config
+from etl.errors import requiere_columnas
 
 logger = logging.getLogger(__name__)
 
@@ -157,6 +158,12 @@ def agregar_columnas_limpias(df: pd.DataFrame) -> pd.DataFrame:
     calculan sobre filas ya validas en capa 1 (ver _flag_outliers),
     asi que invalido y outlier nunca se superponen para la misma fila.
     """
+    requiere_columnas(
+        df,
+        ["price_ars", "precio_invalido", "precio_outlier",
+         "kilometros", "km_invalido", "km_outlier", "anio", "anio_invalido"],
+        "agregar_columnas_limpias",
+    )
     df = df.copy()
     precio_malo = df["precio_invalido"] | df["precio_outlier"]
     km_malo = df["km_invalido"] | df["km_outlier"]
@@ -176,6 +183,11 @@ def aplicar_outliers(df: pd.DataFrame, anio_max: int) -> tuple[pd.DataFrame, dic
     no inflar artificialmente la "muestra" con capturas repetidas del mismo
     auto.
     """
+    requiere_columnas(
+        df,
+        ["id_publicacion", "id_modelo", "price_ars", "precio_invalido", "kilometros", "anio"],
+        "aplicar_outliers",
+    )
     df = df.copy()
     df["km_invalido"] = calcular_km_invalido(df)
     df["anio_invalido"] = calcular_anio_invalido(df, anio_max)

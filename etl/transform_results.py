@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 from etl import config
+from etl.errors import requiere_columnas
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +128,16 @@ def deduplicar_por_aviso(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def categoria_km(km, km_invalido) -> str:
-    if km_invalido:
+    """Categoriza el kilometraje. Un km nulo es "Sin dato" venga como venga.
+
+    El chequeo de nulo va primero y explicito: con km=pd.NA, la comparacion
+    `km == 0` devuelve pd.NA y el `if` revienta con
+    TypeError: boolean value of NA is ambiguous.
+    Hoy es inalcanzable porque agregar_rango_km deriva km_malo de
+    kilometros_limpio.isna(), pero era una precondicion indefensa que depende
+    de que el llamador no se equivoque.
+    """
+    if pd.isna(km_invalido) or bool(km_invalido) or pd.isna(km):
         return "Sin dato"
     if km == 0:
         return "0 KM"
@@ -159,6 +169,7 @@ def agregar_rango_km(df: pd.DataFrame) -> pd.DataFrame:
     kilometros_limpio ya exista (outliers.agregar_columnas_limpias corre antes).
     """
     df = df.copy()
+    requiere_columnas(df, ["kilometros_limpio"], "agregar_rango_km")
     km_malo = df["kilometros_limpio"].isna()
     df["rango_km"] = [
         categoria_km(km, malo) for km, malo in zip(df["kilometros_limpio"], km_malo)
@@ -168,6 +179,10 @@ def agregar_rango_km(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def dolarizar(df: pd.DataFrame, fx_oficial: float, fx_blue: float) -> pd.DataFrame:
+    """Columnas en USD. Las _limpio salen de price_ars_limpio, asi que esta
+    funcion tambien depende de que outliers.agregar_columnas_limpias haya
+    corrido antes."""
+    requiere_columnas(df, ["price_ars", "price_ars_limpio", "precio_invalido"], "dolarizar")
     df = df.copy()
     valido = ~df["precio_invalido"]
     df["price_usd_oficial"] = np.where(valido, df["price_ars"] / fx_oficial, np.nan)

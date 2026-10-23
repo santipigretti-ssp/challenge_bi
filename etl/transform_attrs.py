@@ -2,6 +2,8 @@ import logging
 
 import pandas as pd
 
+from etl.errors import requiere_columnas
+
 logger = logging.getLogger(__name__)
 
 NOMBRE_A_COLUMNA = {
@@ -141,6 +143,9 @@ def normalizar_con_dims(
     dim_transmision: pd.DataFrame,
 ) -> pd.DataFrame:
     """Reemplaza marca/modelo/transmision por el texto normalizado de las dims (single source of truth)."""
+    requiere_columnas(
+        atributos_pivot, ["id_marca", "id_modelo", "id_transmision"], "normalizar_con_dims"
+    )
     df = atributos_pivot.drop(columns=["marca", "modelo", "transmision"], errors="ignore")
     df = df.merge(dim_marca, on="id_marca", how="left")
     df = df.merge(dim_modelo, on="id_modelo", how="left")

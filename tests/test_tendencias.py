@@ -152,3 +152,15 @@ def test_build_tabla_tendencias_tiene_ocho_columnas():
         "id_publicacion", "obs_validas", "precio_ini", "precio_fin",
         "variacion_pct", "tendencia_precio", "tendencia_medible", "orden_tendencia",
     ]
+
+
+def test_build_tabla_tendencias_falla_sin_las_claves_de_orden():
+    """El orden define precio_ini/precio_fin: sin las claves no se puede."""
+    from etl.errors import ValidationError
+
+    df = pd.DataFrame({
+        "id_publicacion": ["A"], "fecha_captura": [pd.Timestamp("2015-11-01").date()],
+        "price_ars": [100.0], "precio_invalido": [False], "precio_outlier": [False],
+    })
+    with pytest.raises(ValidationError, match="_k_serial"):
+        tendencias.build_tabla_tendencias(df, pd.Series(["A"]))

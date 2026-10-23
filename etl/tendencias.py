@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 from etl import config, transform_results
+from etl.errors import requiere_columnas
 
 SIN_PRECIO = "Sin precio"
 OBSERVACION_UNICA = "Observación única"
@@ -63,6 +64,12 @@ def build_tabla_tendencias(historico: pd.DataFrame, ids_publicacion: pd.Series) 
     alimenta directo el KPI de tendencia: se ordena por las claves numericas,
     no por el string __KEY_results (ver transform_results.agregar_claves_orden).
     """
+    requiere_columnas(
+        historico,
+        ["id_publicacion", "fecha_captura", "price_ars", "precio_invalido", "precio_outlier"]
+        + transform_results.CLAVES_ORDEN,
+        "build_tabla_tendencias",
+    )
     validos = historico.loc[
         ~historico["precio_invalido"] & ~historico["precio_outlier"]
     ].sort_values(["id_publicacion", "fecha_captura"] + transform_results.CLAVES_ORDEN)

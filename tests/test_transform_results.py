@@ -1,7 +1,9 @@
+import numpy as np
 import pandas as pd
 import pytest
 
 from etl import transform_results
+from etl.errors import ValidationError
 
 
 # --- categoria_km ---
@@ -25,6 +27,21 @@ from etl import transform_results
 )
 def test_categoria_km(km, invalido, esperado):
     assert transform_results.categoria_km(km, invalido) == esperado
+
+
+@pytest.mark.parametrize("km_nulo", [None, pd.NA, np.nan, float("nan")])
+def test_categoria_km_con_km_nulo_y_flag_apagado(km_nulo):
+    """Antes esto reventaba con pd.NA.
+
+    `km == 0` sobre pd.NA devuelve pd.NA, y el `if` tira
+    TypeError: boolean value of NA is ambiguous. Era inalcanzable por como lo
+    llama agregar_rango_km, pero la precondicion estaba indefensa.
+    """
+    assert transform_results.categoria_km(km_nulo, False) == "Sin dato"
+
+
+def test_categoria_km_con_flag_nulo():
+    assert transform_results.categoria_km(50_000, pd.NA) == "Sin dato"
 
 
 # --- calcular_precio_invalido (piso + techo dinamico) ---
@@ -174,3 +191,25 @@ def test_diagnostico_duplicados_cuenta_intra_dia():
     assert diag["max_capturas_por_aviso"] == 2
     assert diag["avisos_con_duplicado_intra_dia"] == 1
     assert diag["ejemplos_duplicado_intra_dia"] == ["A"]
+
+
+# --- Precondiciones de orden ---
+
+def test_agregar_rango_km_falla_sin_kilometros_limpio():
+    """La dependencia de orden sobre agregar_columnas_limpias es explicita."""
+    df = pd.DataFrame({"kilometros": [50_000]})
+    with pytest.raises(ValidationError, match="kilometros_limpio"):
+        transform_results.agregar_rango_km(df)
+
+
+def test_dolarizar_falla_sin_price_ars_limpio():
+    """Misma dependencia, que antes no estaba ni documentada."""
+    df = pd.DataFrame({"price_ars": [150_000.0], "precio_invalido": [False]})
+    with pytest.raises(ValidationError, match="price_ars_limpio"):
+        transform_results.dolarizar(df, fx_oficial=10.0, fx_blue=15.0)
+
+
+def test_el_error_de_precondicion_nombra_la_funcion():
+    df = pd.DataFrame({"kilometros": [50_000]})
+    with pytest.raises(ValidationError, match="agregar_rango_km"):
+        transform_results.agregar_rango_km(df)
