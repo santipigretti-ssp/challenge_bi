@@ -1,6 +1,6 @@
 # MercadoLibre Used-Car Listings — ETL to Star Schema
 
-[![tests](https://github.com/santipigretti/challenge-bi-etl/actions/workflows/tests.yml/badge.svg)](https://github.com/santipigretti/challenge-bi-etl/actions/workflows/tests.yml)
+[![tests](https://github.com/santipigretti-ssp/challenge_bi/actions/workflows/tests.yml/badge.svg)](https://github.com/santipigretti-ssp/challenge_bi/actions/workflows/tests.yml)
 
 Python ETL that turns a raw scrape of MercadoLibre Argentina used-car listings into an
 eight-table star schema for Power BI.
