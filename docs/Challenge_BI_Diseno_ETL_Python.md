@@ -1,8 +1,30 @@
 # Challenge BI MercadoLibre Autos — Documento de Diseño del ETL en Python
 
+> ## ⚠️ Nota de versión — auditoría de 2026-10-23
+>
+> Este documento es el **diseño original** del ETL y se conserva como anexo histórico. Después
+> de escribirlo se hizo una auditoría del pipeline que corrigió varias cosas, así que algunas
+> partes de abajo describen el comportamiento *anterior*. Lo que cambió:
+>
+> | Sección | Qué cambió |
+> |---|---|
+> | 3.2 | `fact_publicaciones` tiene **36** columnas, no 35 (la lista enumerada siempre tuvo 36; el encabezado estaba mal). `tabla_tendencias` pasó de 6 a 8 columnas (`tendencia_medible`, `orden_tendencia`). `dim_FX` pasó de 3 a 4 (`fuente_fx`). |
+> | 3.3 | Las 7 relaciones siguen igual. Queda documentado que `dim_fecha` no cubre `stop_time` (44% de los valores sin fila en la dimensión). |
+> | 5.1 | `anio_invalido` ya no usa `datetime.now()`: el umbral se deriva de `max(fecha_captura).year + 1`. |
+> | 5.2 | Capa 2 tiene ahora **dos niveles de referencia**. Los avisos sin modelo/año (y los grupos sin muestra mínima) se juzgan contra un fence global, porque antes no podían marcarse nunca. Los cuartiles se calculan sobre **un valor por aviso**, no por captura. |
+> | 5.5 | `tendencia_precio` tiene 5 categorías: se agregó `Observación única` para los 543 avisos con una sola observación válida, que antes caían en `Estable`. |
+> | 5.6 | El orden de deduplicación usa las tres claves numéricas de `__KEY_results`, no el string. |
+> | 6 | La salida son 8 CSVs **más** `_manifest.json` (filas, columnas, bytes y sha256 por tabla). |
+> | 7.1 | Las validaciones son excepciones explícitas, no `assert` (con `python -O` se salteaba todo el gate). |
+>
+> La referencia column-by-column al día está en [DATA_DICTIONARY.md](DATA_DICTIONARY.md), que se
+> genera desde `etl/schemas.py`. El antes/después medido de cada corrección está en el
+> [README](../README.md#data-quality-audit).
+
+
 > Documento técnico para llevar a una sesión de VS Code. Contiene contexto, decisiones de diseño, reglas de negocio, especificación del pipeline y validaciones. Todo lo que aparece acá debería traducirse directamente a código.
 
-> **ETL implementado y corriendo.** Este documento fue auditado contra los CSVs reales y corregido para reflejar lo que efectivamente se construyó (varios supuestos del diseño original no se sostenían — ver notas "🔧 Corregido" en cada sección). Código en `challenge_bi/` (correr con `python3 main.py` desde ahí, venv + `requirements.txt`). Plan completo de la auditoría/decisiones en `/Users/Santi/.claude/plans/hola-calude-necesito-que-greedy-sparkle.md` y resumen para retomar en `challenge_bi/README.md`. **Lo único que falta es la parte de Power BI** (sección 8): cargar los 8 CSVs de `challenge_bi/data/processed/` y armar el `.pbix`.
+> **ETL implementado y corriendo.** Este documento fue auditado contra los CSVs reales y corregido para reflejar lo que efectivamente se construyó (varios supuestos del diseño original no se sostenían — ver notas "🔧 Corregido" en cada sección). Código en `challenge_bi/` (correr con `python3 main.py` desde ahí, venv + `requirements.txt`). Auditoría de calidad de datos con el antes/después medido de cada corrección: ver el [README](../README.md#data-quality-audit). **Lo único que falta es la parte de Power BI** (sección 8): cargar los 8 CSVs de `challenge_bi/data/processed/` y armar el `.pbix`.
 
 ---
 
@@ -138,7 +160,7 @@ Granularidad por captura (`__KEY_results`). Útil si se quisiera enriquecer con 
 
 > 🔧 Columnas reales tal como salen en `data/processed/*.csv` (verificado contra la cabecera de cada archivo).
 
-**`fact_publicaciones`** (35 columnas):
+**`fact_publicaciones`** (36 columnas) 🔧 *el encabezado decía 35; la lista de abajo siempre tuvo 36*:
 - `id_publicacion` (PK) ← renombre de `id_u9`
 - `title`, `permalink` 🔧 (se agregó, el doc original lo recomendaba como útil pero no lo listaba acá), `condition`, `currency_id`, `category_id`, `listing_type_id`, `accepts_mercadopago`
 - `stop_time` (datetime), `fecha_pub` (date = fecha_captura más reciente)

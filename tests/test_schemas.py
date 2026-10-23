@@ -65,3 +65,40 @@ def test_ninguna_tabla_expone_las_claves_privadas_de_orden():
 def test_no_hay_columnas_repetidas_en_ninguna_tabla():
     for nombre, columnas in schemas.ESQUEMAS.items():
         assert len(columnas) == len(set(columnas)), "{} tiene columnas repetidas".format(nombre)
+
+
+# --- El diccionario de datos no puede quedar atras del codigo ---
+
+def test_el_diccionario_cubre_todas_las_columnas():
+    """Una columna nueva sin descripcion deja una celda vacia en el doc."""
+    import sys
+    from pathlib import Path
+
+    raiz = Path(__file__).resolve().parent.parent
+    sys.path.insert(0, str(raiz / "scripts"))
+    import generar_diccionario
+
+    sin_descripcion = []
+    for tabla, columnas in schemas.ESQUEMAS.items():
+        for columna in columnas:
+            _, _, _, definicion = generar_diccionario._descripcion(tabla, columna)
+            if not definicion or "sin descripcion" in definicion:
+                sin_descripcion.append("{}.{}".format(tabla, columna))
+
+    assert not sin_descripcion, "columnas sin descripcion: {}".format(sin_descripcion)
+
+
+def test_el_diccionario_en_disco_esta_actualizado():
+    """Si el esquema cambio y nadie regenero el doc, este test lo dice."""
+    import sys
+    from pathlib import Path
+
+    raiz = Path(__file__).resolve().parent.parent
+    sys.path.insert(0, str(raiz / "scripts"))
+    import generar_diccionario
+
+    en_disco = (raiz / "docs" / "DATA_DICTIONARY.md").read_text(encoding="utf-8")
+    assert en_disco == generar_diccionario.generar(), (
+        "docs/DATA_DICTIONARY.md esta desactualizado. "
+        "Regeneralo con: python scripts/generar_diccionario.py"
+    )
