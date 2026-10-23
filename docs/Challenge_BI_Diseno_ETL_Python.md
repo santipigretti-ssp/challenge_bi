@@ -9,7 +9,8 @@
 > | Sección | Qué cambió |
 > |---|---|
 > | 3.2 | `fact_publicaciones` tiene **36** columnas, no 35 (la lista enumerada siempre tuvo 36; el encabezado estaba mal). `tabla_tendencias` pasó de 6 a 8 columnas (`tendencia_medible`, `orden_tendencia`). `dim_FX` pasó de 3 a 4 (`fuente_fx`). |
-> | 3.3 | Las 7 relaciones siguen igual. Queda documentado que `dim_fecha` no cubre `stop_time` (44% de los valores sin fila en la dimensión). |
+> | 3.3 | Relación nueva (la 8ª): `fact_publicaciones[fecha_stop] → dim_fecha[fecha]`, N:1, **inactiva** (se activa con `USERELATIONSHIP` para "publicaciones que vencen por mes"). `fecha_pub` sigue siendo la activa. |
+> | 3.2 / 6 | `dim_fecha` pasa de 73 a 133 filas y de 8 a 9 columnas (`es_periodo_captura`): el calendario ahora llega hasta el último `stop_time` (2016-02-19) y no solo hasta el fin del scrapeo. Antes el 44% de los `stop_time` no tenía fila en la dimensión. `fact_publicaciones` suma `fecha_stop` y queda en 37 columnas. |
 > | 5.1 | `anio_invalido` ya no usa `datetime.now()`: el umbral se deriva de `max(fecha_captura).year + 1`. |
 > | 5.2 | Capa 2 tiene ahora **dos niveles de referencia**. Los avisos sin modelo/año (y los grupos sin muestra mínima) se juzgan contra un fence global, porque antes no podían marcarse nunca. Los cuartiles se calculan sobre **un valor por aviso**, no por captura. |
 > | 5.5 | `tendencia_precio` tiene 5 categorías: se agregó `Observación única` para los 543 avisos con una sola observación válida, que antes caían en `Estable`. |
@@ -160,7 +161,7 @@ Granularidad por captura (`__KEY_results`). Útil si se quisiera enriquecer con 
 
 > 🔧 Columnas reales tal como salen en `data/processed/*.csv` (verificado contra la cabecera de cada archivo).
 
-**`fact_publicaciones`** (36 columnas) 🔧 *el encabezado decía 35; la lista de abajo siempre tuvo 36*:
+**`fact_publicaciones`** (37 columnas) 🔧 *el encabezado decía 35 cuando la lista tenía 36; la auditoría sumó además `fecha_stop`*:
 - `id_publicacion` (PK) ← renombre de `id_u9`
 - `title`, `permalink` 🔧 (se agregó, el doc original lo recomendaba como útil pero no lo listaba acá), `condition`, `currency_id`, `category_id`, `listing_type_id`, `accepts_mercadopago`
 - `stop_time` (datetime), `fecha_pub` (date = fecha_captura más reciente)

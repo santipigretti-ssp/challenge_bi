@@ -18,7 +18,7 @@ Las 8 tablas que el pipeline escribe en `data/processed/`, mas `_manifest.json` 
 
 **Grano:** 1 fila por aviso (snapshot de la captura mas reciente)  
 **PK:** `id_publicacion`  
-**Filas:** 6.586 · **Columnas:** 36
+**Filas:** 6.586 · **Columnas:** 37
 
 | Columna | Tipo | Nulos | Origen | Definicion |
 |---|---|---|---|---|
@@ -31,6 +31,7 @@ Las 8 tablas que el pipeline escribe en `data/processed/`, mas `_manifest.json` 
 | `listing_type_id` | texto | no | crudo | Tipo de publicacion (`gold_premium`, etc.). |
 | `accepts_mercadopago` | booleano | no | crudo | **Sin varianza en este snapshot**: es `False` en las 124.511 filas crudas, asi que no lleva informacion. Se conserva por fidelidad al origen, y el detector de varianza cero de `validate` la reporta en cada corrida. |
 | `stop_time` | datetime | no | crudo | Fin de la publicacion. Llega hasta 2016-02-19, fuera del rango de `dim_fecha`. Cambia en el 25,7% de los avisos: el vendedor puede renovar. |
+| `fecha_stop` | fecha | no | derivada | `stop_time` truncado a dia. Existe porque Power BI no puede relacionar una columna datetime con la clave date de `dim_fecha`. Es la FK de la relacion **inactiva** con el calendario (se activa con USERELATIONSHIP para "publicaciones que vencen por mes"). |
 | `fecha_pub` | fecha | no | derivada | Fecha de la captura mas reciente del aviso. Renombre de `fecha_captura` al armar el snapshot. Es la clave de la relacion activa con `dim_fecha`. |
 | `price` | decimal | no | crudo | Precio en la moneda original (`currency_id`). |
 | `price_ars` | decimal | no | derivada | Precio normalizado a ARS. Si `currency_id = USD`, se multiplica por el dolar blue de `dim_FX`. |
@@ -145,11 +146,11 @@ Filtrar por `tendencia_medible` para el split de 3 vias del dashboard: da un den
 
 ## `dim_fecha`
 
-**Grano:** 1 fila por dia del periodo de captura  
+**Grano:** 1 fila por dia del calendario cubierto  
 **PK:** `fecha`  
-**Filas:** 73 · **Columnas:** 8
+**Filas:** 133 · **Columnas:** 9
 
-Cubre 2015-10-10 a 2015-12-21, el periodo de captura. **No cubre `stop_time`**, que llega hasta 2016-02-19: el 44% de los `stop_time` no tiene fila en esta dimension. Las relaciones del modelo usan `fecha_pub` (activa) y `fecha_captura` (inactiva), asi que no hay relacion rota, pero no se puede cortar "publicaciones que vencen por mes" por el calendario.
+Cubre 2015-10-10 a 2016-02-19: desde la primera captura hasta el ultimo `stop_time`. Antes llegaba solo hasta el fin del scrapeo (73 dias) y el 44% de los `stop_time` quedaba sin fila en la dimension. `es_periodo_captura` marca los 73 dias en que el scraper efectivamente corrio, para que un visual de capturas pueda filtrarlos.
 
 | Columna | Tipo | Nulos | Origen | Definicion |
 |---|---|---|---|---|
@@ -161,6 +162,7 @@ Cubre 2015-10-10 a 2015-12-21, el periodo de captura. **No cubre `stop_time`**, 
 | `dia` | entero | no | derivada | Dia del mes. |
 | `dia_semana_num` | entero | no | derivada | 0 = lunes ... 6 = domingo. |
 | `dia_semana_nombre` | texto | no | derivada | Nombre del dia en espanol. |
+| `es_periodo_captura` | booleano | no | derivada | True en los 73 dias en que el scraper efectivamente corrio. El calendario se extiende mas alla para cubrir `fecha_stop`, asi que un visual de capturas tiene que filtrar por esta columna para no mostrar dias de cola vacios. |
 
 ---
 

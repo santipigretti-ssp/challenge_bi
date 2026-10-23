@@ -10,7 +10,7 @@ from __future__ import annotations
 
 FACT_PUBLICACIONES_COLUMNAS = [
     "id_publicacion", "title", "permalink", "condition", "currency_id", "category_id",
-    "listing_type_id", "accepts_mercadopago", "stop_time", "fecha_pub",
+    "listing_type_id", "accepts_mercadopago", "stop_time", "fecha_stop", "fecha_pub",
     "price", "price_ars", "price_ars_limpio",
     "price_usd_oficial", "price_usd_oficial_limpio", "price_usd_blue", "price_usd_blue_limpio",
     "precio_invalido", "precio_outlier",
@@ -36,7 +36,7 @@ DIM_TRANSMISION_COLUMNAS = ["id_transmision", "transmision"]
 
 DIM_FECHA_COLUMNAS = [
     "fecha", "anio", "mes_num", "mes_nombre", "anio_mes",
-    "dia", "dia_semana_num", "dia_semana_nombre",
+    "dia", "dia_semana_num", "dia_semana_nombre", "es_periodo_captura",
 ]
 
 DIM_FX_COLUMNAS = ["fecha_fx", "usd_oficial", "usd_blue", "fuente_fx"]

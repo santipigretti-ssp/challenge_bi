@@ -18,7 +18,7 @@ history, which is where the interesting signal lives.
 | **Output** | 8 CSVs + a manifest with a SHA-256 per table |
 | **Listings** | 6,586 over 2015-10-10 → 2015-12-21 |
 | **Runtime** | ~2 s on the full dataset |
-| **Tests** | 170, running on a committed 1.5 MB fixture — no network, no 100 MB download |
+| **Tests** | 172, running on a committed 1.5 MB fixture — no network, no 100 MB download |
 | **Determinism** | Same input → byte-identical output, verified by test |
 
 ---
@@ -43,7 +43,7 @@ flowchart TD
     MERGE --> L2["<b>Layer 2 — statistics</b><br/>two-tier IQR fence<br/>quartiles per distinct listing"]
 
     L2 --> BRANCH{{"<b>branch here</b><br/>never re-derive"}}
-    BRANCH -->|dedup| FP["fact_publicaciones<br/>6,586 × 36"]
+    BRANCH -->|dedup| FP["fact_publicaciones<br/>6,586 × 37"]
     BRANCH -->|as-is| FPH["fact_precios_historicos<br/>124,511 × 9"]
     FPH --> TT["tabla_tendencias<br/>6,586 × 8"]
     FP --> TT
@@ -71,6 +71,7 @@ erDiagram
     dim_transmision ||--o{ fact_publicaciones : id_transmision
     dim_fecha ||--o{ fact_publicaciones : "fecha_pub (active)"
     dim_fecha ||--o{ fact_precios_historicos : "fecha_captura (INACTIVE)"
+    dim_fecha ||--o{ fact_publicaciones : "fecha_stop (INACTIVE)"
     fact_publicaciones ||--o{ fact_precios_historicos : id_publicacion
     fact_publicaciones ||--|| tabla_tendencias : id_publicacion
 
@@ -112,7 +113,7 @@ period rather than a daily series.
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
-pytest                            # 170 tests, ~10 s, no network
+pytest                            # 172 tests, ~10 s, no network
 ```
 
 `requirements-dev.txt` is deliberately small (pandas, numpy, requests, pytest) so CI stays
@@ -144,11 +145,11 @@ python main.py
 
 | Table | Grain | PK | Rows | Cols |
 |---|---|---|---|---|
-| `fact_publicaciones` | one row per listing (latest capture) | `id_publicacion` | 6,586 | 36 |
+| `fact_publicaciones` | one row per listing (latest capture) | `id_publicacion` | 6,586 | 37 |
 | `fact_precios_historicos` | one row per price capture | `id_publicacion` + `__KEY_results` | 124,511 | 9 |
 | `tabla_tendencias` | one row per listing | `id_publicacion` | 6,586 | 8 |
 | `dim_marca` / `dim_modelo` / `dim_transmision` | one row per value | `id_*` | 3 / 3 / 3 | 2 |
-| `dim_fecha` | one row per day | `fecha` | 73 | 8 |
+| `dim_fecha` | one row per day | `fecha` | 133 | 9 |
 | `dim_FX` | the rate used this run | `fecha_fx` | 1 | 4 |
 
 Full column-by-column reference: **[docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md)** (generated
@@ -203,6 +204,8 @@ finding, with the before/after measured on the full dataset. This is the part wo
 | 9 | **Non-atomic writes.** A crash mid-write left partial CSVs that Power BI would consume without complaint. | partial files | all tables written to temporaries, then `os.replace`; schema and column order verified *before* touching the filesystem; `_manifest.json` records a SHA-256 per table |
 | 10 | **Docs contradicted the code.** README and design doc both said `fact_publicaciones` has "35 columnas" while claiming to be "verified against each file's header". It has 36. | 35 claimed | the column list now lives in `etl/schemas.py`, the data dictionary is generated from it, and a test pins both |
 
+| 11 | **The date dimension didn't cover `stop_time`.** The calendar spanned only the 73 capture days, so 44% of `stop_time` values had no row to join to — you couldn't slice "listings expiring by month" by the calendar at all. | 2,912 of 6,586 unmatched | 0. The calendar now runs to the last referenced date (133 days), `es_periodo_captura` marks the 73 real scrape days, and `fecha_stop` (a date, since Power BI can't relate a datetime to a date key) joins through an inactive relationship |
+
 Two findings from the audit turned out to be **non-issues**, and are documented as such rather
 than quietly dropped: the `Int64` cast does work (the CSV writes `2015`, not `2015.0` — the
 `float64` you see on re-read is just pandas inference), and the string sort picks the right
@@ -230,7 +233,7 @@ The exchange rate is the only external dependency, and it can be pinned with
 
 ## Testing
 
-170 tests. The ones worth knowing about:
+172 tests. The ones worth knowing about:
 
 - **Business rules**, parametrized on their boundaries: `categoria_km`, `clasificar_tendencia`,
   `calc_iqr_bounds`, the price floor per currency, `km_invalido` per band.
@@ -287,10 +290,6 @@ Raw inputs are **not** in the repo: `etl/config.py` reads them from `../CSVs/`. 
 - **`accepts_mercadopago` carries no information** — `False` in all 124,511 source rows. Kept for
   source fidelity, and surfaced by a zero-variance detector on every run rather than left as an
   undocumented passenger.
-- **`dim_fecha` doesn't cover `stop_time`.** The calendar spans the 73 capture days; `stop_time`
-  runs to 2016-02-19, so 44% of values have no row in the date dimension. No relationship is
-  broken (the model relates `fecha_pub` and `fecha_captura`), but you can't slice "listings
-  expiring by month" by the calendar.
 - **`dim_FX` is one rate, not a daily series.** Fine for a 73-day window; wrong for a longer one.
 - **The `.pbix` and DAX measures are not in this repo.** This is the data layer.
 

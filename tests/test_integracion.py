@@ -207,3 +207,19 @@ def test_dos_corridas_dan_el_mismo_sha256(fx_fijo):
 
     distintos = [n for n in primera if primera[n]["sha256"] != segunda[n]["sha256"]]
     assert not distintos, "no reproducible: {}".format(distintos)
+
+
+def test_dim_fecha_cubre_stop_time(fx_fijo):
+    """Antes el calendario llegaba solo al fin del scrapeo y el 44% de los
+    stop_time quedaba sin fila en la dimension."""
+    resultado = main.run()
+    fp = resultado.tablas["fact_publicaciones"]
+    dim_fecha = resultado.tablas["dim_fecha"]
+
+    sin_fila = ~fp["fecha_stop"].dropna().isin(dim_fecha["fecha"])
+    assert not sin_fila.any(), "{} fecha_stop sin fila en dim_fecha".format(int(sin_fila.sum()))
+
+    # El calendario se extiende mas alla del periodo de captura.
+    assert dim_fecha["fecha"].max() >= fp["fecha_stop"].max()
+    assert (~dim_fecha["es_periodo_captura"]).any(), "el calendario no se extendio"
+    assert dim_fecha.loc[dim_fecha["es_periodo_captura"], "fecha"].max() == fp["fecha_pub"].max()

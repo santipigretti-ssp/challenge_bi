@@ -7,8 +7,20 @@ MESES_ES = {
 DIAS_ES = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves", 4: "Viernes", 5: "Sábado", 6: "Domingo"}
 
 
-def build_dim_fecha(fecha_min, fecha_max) -> pd.DataFrame:
-    fechas = pd.date_range(start=fecha_min, end=fecha_max, freq="D")
+def build_dim_fecha(fecha_min, fecha_max_calendario, fecha_max_captura) -> pd.DataFrame:
+    """Calendario desde la primera captura hasta la ultima fecha referenciada.
+
+    El calendario llega hasta fecha_max_calendario, no hasta la ultima captura,
+    porque stop_time apunta mas alla del periodo de scrapeo: cubria solo los 73
+    dias de captura y el 44% de los stop_time quedaba sin fila en la dimension,
+    asi que no se podia cortar "publicaciones que vencen por mes" por el
+    calendario.
+
+    es_periodo_captura distingue los dias en que el scraper efectivamente
+    corrio, para que un visual pueda filtrarlos y no mostrar los dias de cola
+    vacios de capturas.
+    """
+    fechas = pd.date_range(start=fecha_min, end=fecha_max_calendario, freq="D")
     df = pd.DataFrame({"fecha": fechas})
     df["anio"] = df["fecha"].dt.year
     df["mes_num"] = df["fecha"].dt.month
@@ -18,6 +30,7 @@ def build_dim_fecha(fecha_min, fecha_max) -> pd.DataFrame:
     df["dia_semana_num"] = df["fecha"].dt.weekday
     df["dia_semana_nombre"] = df["dia_semana_num"].map(DIAS_ES)
     df["fecha"] = df["fecha"].dt.date
+    df["es_periodo_captura"] = df["fecha"] <= fecha_max_captura
     return df
 
 

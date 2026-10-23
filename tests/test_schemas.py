@@ -8,10 +8,10 @@ aca vuelve ese claim verificable por CI en vez de por buena voluntad.
 from etl import schemas
 
 
-def test_fact_publicaciones_tiene_36_columnas_en_este_orden():
+def test_fact_publicaciones_tiene_37_columnas_en_este_orden():
     assert schemas.FACT_PUBLICACIONES_COLUMNAS == [
         "id_publicacion", "title", "permalink", "condition", "currency_id", "category_id",
-        "listing_type_id", "accepts_mercadopago", "stop_time", "fecha_pub",
+        "listing_type_id", "accepts_mercadopago", "stop_time", "fecha_stop", "fecha_pub",
         "price", "price_ars", "price_ars_limpio",
         "price_usd_oficial", "price_usd_oficial_limpio", "price_usd_blue", "price_usd_blue_limpio",
         "precio_invalido", "precio_outlier",
@@ -20,7 +20,7 @@ def test_fact_publicaciones_tiene_36_columnas_en_este_orden():
         "km_invalido", "anio_invalido", "km_outlier",
         "rango_km", "orden_rango_km", "sin_atributos",
     ]
-    assert len(schemas.FACT_PUBLICACIONES_COLUMNAS) == 36
+    assert len(schemas.FACT_PUBLICACIONES_COLUMNAS) == 37
 
 
 def test_fact_precios_historicos_tiene_9_columnas():
@@ -32,6 +32,13 @@ def test_tabla_tendencias_tiene_8_columnas():
     assert len(schemas.TABLA_TENDENCIAS_COLUMNAS) == 8
     assert "tendencia_medible" in schemas.TABLA_TENDENCIAS_COLUMNAS
     assert "orden_tendencia" in schemas.TABLA_TENDENCIAS_COLUMNAS
+
+
+def test_dim_fecha_tiene_9_columnas():
+    """8 originales + es_periodo_captura, para distinguir los dias de scrapeo
+    real de los que el calendario agrega para cubrir fecha_stop."""
+    assert len(schemas.DIM_FECHA_COLUMNAS) == 9
+    assert "es_periodo_captura" in schemas.DIM_FECHA_COLUMNAS
 
 
 def test_dim_fx_tiene_4_columnas():

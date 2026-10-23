@@ -6,6 +6,8 @@ import pytest
 from etl import validate
 from etl.errors import ValidationError
 
+FECHAS = [pd.Timestamp("2015-11-0{}".format(d)).date() for d in (1, 2, 3)]
+
 
 def _tablas_validas():
     """Juego minimo de tablas que pasa todas las validaciones."""
@@ -16,9 +18,12 @@ def _tablas_validas():
             "id_modelo": ["MO1", None],
             "id_transmision": ["T1", "T1"],
             "price_ars": [100_000.0, 200_000.0],
+            "fecha_pub": [FECHAS[0], FECHAS[1]],
+            "fecha_stop": [FECHAS[1], FECHAS[2]],
         }),
         "fact_precios_historicos": pd.DataFrame({"id_publicacion": ["A", "A", "B"]}),
         "tabla_tendencias": pd.DataFrame({"id_publicacion": ["A", "B"]}),
+        "dim_fecha": pd.DataFrame({"fecha": FECHAS}),
         "dim_marca": pd.DataFrame({"id_marca": ["M1"], "marca": ["Volkswagen"]}),
         "dim_modelo": pd.DataFrame({"id_modelo": ["MO1"], "modelo": ["Vento"]}),
         "dim_transmision": pd.DataFrame({"id_transmision": ["T1"], "transmision": ["Manual"]}),
@@ -129,6 +134,8 @@ def test_no_avisa_si_todas_las_columnas_tienen_varianza(caplog):
         "id_modelo": ["MO1", None],
         "id_transmision": ["T1", "T2"],
         "price_ars": [100_000.0, 200_000.0],
+        "fecha_pub": [FECHAS[0], FECHAS[1]],
+        "fecha_stop": [FECHAS[1], FECHAS[2]],
     })
     t["dim_marca"] = pd.DataFrame({"id_marca": ["M1", "M2"], "marca": ["Volkswagen", "Suzuki"]})
     t["dim_transmision"] = pd.DataFrame({

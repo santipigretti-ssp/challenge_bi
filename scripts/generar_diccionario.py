@@ -34,7 +34,7 @@ GRANO = {
     "dim_marca": ("1 fila por marca", "id_marca"),
     "dim_modelo": ("1 fila por modelo", "id_modelo"),
     "dim_transmision": ("1 fila por tipo de transmision", "id_transmision"),
-    "dim_fecha": ("1 fila por dia del periodo de captura", "fecha"),
+    "dim_fecha": ("1 fila por dia del calendario cubierto", "fecha"),
     "dim_FX": ("1 fila: la cotizacion usada en la corrida", "fecha_fx"),
 }
 
@@ -45,7 +45,7 @@ FILAS_REALES = {
     "dim_marca": "3",
     "dim_modelo": "3",
     "dim_transmision": "3",
-    "dim_fecha": "73",
+    "dim_fecha": "133",
     "dim_FX": "1",
 }
 
@@ -62,11 +62,10 @@ NOTAS_TABLA = {
         "(543 `Observación única` + 414 `Sin precio`) se reportan aparte."
     ),
     "dim_fecha": (
-        "Cubre 2015-10-10 a 2015-12-21, el periodo de captura. **No cubre `stop_time`**, "
-        "que llega hasta 2016-02-19: el 44% de los `stop_time` no tiene fila en esta "
-        "dimension. Las relaciones del modelo usan `fecha_pub` (activa) y "
-        "`fecha_captura` (inactiva), asi que no hay relacion rota, pero no se puede "
-        "cortar \"publicaciones que vencen por mes\" por el calendario."
+        "Cubre 2015-10-10 a 2016-02-19: desde la primera captura hasta el ultimo `stop_time`. "
+        "Antes llegaba solo hasta el fin del scrapeo (73 dias) y el 44% de los `stop_time` "
+        "quedaba sin fila en la dimension. `es_periodo_captura` marca los 73 dias en que el "
+        "scraper efectivamente corrio, para que un visual de capturas pueda filtrarlos."
     ),
     "dim_FX": (
         "Una sola cotizacion para todo el periodo, no una serie diaria. Es la de cierre "
@@ -96,6 +95,10 @@ _reg("accepts_mercadopago", "booleano", "no", CRUDO,
 _reg("stop_time", "datetime", "no", CRUDO,
      "Fin de la publicacion. Llega hasta 2016-02-19, fuera del rango de `dim_fecha`. "
      "Cambia en el 25,7% de los avisos: el vendedor puede renovar.")
+_reg("fecha_stop", "fecha", "no", DERIVADA,
+     "`stop_time` truncado a dia. Existe porque Power BI no puede relacionar una columna "
+     "datetime con la clave date de `dim_fecha`. Es la FK de la relacion **inactiva** con el "
+     "calendario (se activa con USERELATIONSHIP para \"publicaciones que vencen por mes\").")
 _reg("fecha_pub", "fecha", "no", DERIVADA,
      "Fecha de la captura mas reciente del aviso. Renombre de `fecha_captura` al armar el snapshot. "
      "Es la clave de la relacion activa con `dim_fecha`.")
@@ -203,6 +206,10 @@ _reg("anio_mes", "texto", "no", DERIVADA, "`YYYY-MM`, para agrupar por mes mante
 _reg("dia", "entero", "no", DERIVADA, "Dia del mes.")
 _reg("dia_semana_num", "entero", "no", DERIVADA, "0 = lunes ... 6 = domingo.")
 _reg("dia_semana_nombre", "texto", "no", DERIVADA, "Nombre del dia en espanol.")
+_reg("es_periodo_captura", "booleano", "no", DERIVADA,
+     "True en los 73 dias en que el scraper efectivamente corrio. El calendario se extiende mas "
+     "alla para cubrir `fecha_stop`, asi que un visual de capturas tiene que filtrar por esta "
+     "columna para no mostrar dias de cola vacios.")
 _reg("fecha_fx", "fecha", "no", DERIVADA,
      "Fecha de la cotizacion: cierre del ultimo mes cerrado respecto de la ultima captura.")
 _reg("usd_oficial", "decimal", "no", CRUDO, "Dolar oficial (venta) de la API de ArgentinaDatos.")

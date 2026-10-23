@@ -111,6 +111,15 @@ def run_asserts(tablas: dict) -> None:
            "tabla_tendencias tiene {} filas y fact_publicaciones {}".format(
                len(tabla_tendencias), len(fact_publicaciones)))
 
+    # Cobertura del calendario. Es el chequeo que habria atrapado de entrada
+    # que dim_fecha no cubria stop_time: el 44% de los valores quedaba sin fila.
+    dim_fecha = tablas["dim_fecha"]
+    for columna in ("fecha_pub", "fecha_stop"):
+        sin_fila = ~fact_publicaciones[columna].dropna().isin(dim_fecha["fecha"])
+        _check(not sin_fila.any(),
+               "{} valores de fact_publicaciones.{} no tienen fila en dim_fecha".format(
+                   int(sin_fila.sum()), columna))
+
     # dim_FX.
     _check(dim_fx.shape[0] == 1, "dim_FX deberia tener exactamente 1 fila, tiene {}".format(dim_fx.shape[0]))
     if dim_fx.shape[0] == 1:

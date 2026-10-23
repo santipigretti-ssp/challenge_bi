@@ -87,6 +87,9 @@ def run() -> ResultadoCorrida:
     fact_publicaciones = transform_results.deduplicar_por_aviso(df_base).copy()
     fact_publicaciones = transform_results.agregar_rango_km(fact_publicaciones)
     fact_publicaciones = transform_results.dolarizar(fact_publicaciones, fx_dict["usd_oficial"], fx_dict["usd_blue"])
+    # Power BI no puede relacionar una columna datetime con una clave date, asi
+    # que stop_time necesita su version truncada para poder unirse a dim_fecha.
+    fact_publicaciones["fecha_stop"] = fact_publicaciones["stop_time"].dt.date
     fact_publicaciones = fact_publicaciones.rename(columns={"fecha_captura": "fecha_pub"})
     fact_publicaciones = fact_publicaciones[schemas.FACT_PUBLICACIONES_COLUMNAS]
 
@@ -99,7 +102,10 @@ def run() -> ResultadoCorrida:
         df_base, fact_publicaciones["id_publicacion"]
     )
 
-    dim_fecha = dimensions.build_dim_fecha(fecha_min, fecha_max)
+    # El calendario llega hasta la ultima fecha que alguna tabla referencia, no
+    # hasta la ultima captura: stop_time apunta mas alla del periodo de scrapeo.
+    fecha_max_calendario = max(fecha_max, fact_publicaciones["fecha_stop"].max())
+    dim_fecha = dimensions.build_dim_fecha(fecha_min, fecha_max_calendario, fecha_max)
     dim_fx = dimensions.build_dim_fx(fx_dict)
 
     tablas = {
