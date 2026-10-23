@@ -13,6 +13,33 @@ def test_calc_iqr_bounds():
     assert upper == pytest.approx(55.0)
 
 
+# --- calcular_anio_invalido ---
+
+@pytest.mark.parametrize(
+    "anio,esperado",
+    [
+        (None, True),    # sin dato
+        (1909, True),    # por debajo de ANIO_MIN
+        (1910, False),   # justo en el limite
+        (2015, False),
+        (2016, False),   # ultimo anio valido con anio_max=2016
+        (2017, True),    # un anio despues del maximo derivado de los datos
+        (2027, True),
+    ],
+)
+def test_calcular_anio_invalido_usa_anio_max_explicito(anio, esperado):
+    """El umbral entra por parametro, no sale de datetime.now()."""
+    df = pd.DataFrame({"anio": pd.array([anio], dtype="Int64")})
+    assert bool(outliers.calcular_anio_invalido(df, anio_max=2016).iloc[0]) is esperado
+
+
+def test_calcular_anio_invalido_no_depende_del_reloj():
+    """Mismo input y distinto anio_max dan distinto resultado, y solo por eso."""
+    df = pd.DataFrame({"anio": pd.array([2020], dtype="Int64")})
+    assert bool(outliers.calcular_anio_invalido(df, anio_max=2016).iloc[0]) is True
+    assert bool(outliers.calcular_anio_invalido(df, anio_max=2030).iloc[0]) is False
+
+
 # --- calcular_km_invalido ---
 
 @pytest.mark.parametrize(
@@ -75,7 +102,7 @@ def test_aplicar_outliers_gate_por_avisos_distintos():
             })
 
     df = pd.DataFrame(grupo_grande + grupo_chico)
-    df, diag = outliers.aplicar_outliers(df)
+    df, diag = outliers.aplicar_outliers(df, anio_max=2016)
 
     # 9 avisos distintos: el gate pasa y el precio raro se marca.
     assert df.loc[df["id_publicacion"] == "G8", "precio_outlier"].all()

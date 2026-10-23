@@ -5,10 +5,14 @@ alguien lo regenera y pierde cobertura de capa 2, de los casos de borde de capa 
 o de los avisos sin atributos, estos tests fallan en vez de pasar en verde sobre
 una muestra que no prueba nada. Ver tests/fixtures/README.md.
 """
+import pathlib
+
 import pandas as pd
 
 import main
 from etl import config
+
+RAIZ_REPO = pathlib.Path(__file__).resolve().parent.parent
 
 AVISOS_FIXTURE = 161
 CAPTURAS_FIXTURE = 3306
@@ -95,3 +99,48 @@ def test_columnas_de_salida_coinciden_con_el_contrato(fx_fijo):
 
     fph = pd.read_csv(config.PROCESSED_DIR / "fact_precios_historicos.csv")
     assert list(fph.columns) == main.FACT_PRECIOS_HISTORICOS_COLUMNAS
+
+
+def test_pipeline_es_reproducible(fx_fijo):
+    """Dos corridas con el mismo input dan CSVs byte-identicos.
+
+    Esta afirmacion recien es honesta desde que anio_invalido dejo de leer
+    datetime.now(): antes el umbral de anio cambiaba de ano en ano y arrastraba
+    a los dos filtros de elegibilidad del IQR, las columnas _limpio, rango_km
+    y tabla_tendencias.
+    """
+    main.run()
+    primera = {n: (config.PROCESSED_DIR / n).read_bytes() for n in ARCHIVOS_ESPERADOS}
+
+    main.run()
+    segunda = {n: (config.PROCESSED_DIR / n).read_bytes() for n in ARCHIVOS_ESPERADOS}
+
+    distintos = [n for n in ARCHIVOS_ESPERADOS if primera[n] != segunda[n]]
+    assert not distintos, "no reproducible: {}".format(distintos)
+
+
+def test_ningun_modulo_de_transformacion_lee_el_reloj():
+    """Guard de reproducibilidad a nivel codigo fuente.
+
+    Parchear datetime en un test no sirve de guard: si un modulo hace
+    `from datetime import datetime`, el nombre ya quedo resuelto en su
+    namespace y el parche no lo alcanza. Lo que si detecta la regresion es
+    buscar la llamada en el fuente. main.py queda excluido porque usa
+    time.time() solo para medir la duracion, que va a las metricas y no a
+    ninguna tabla de salida.
+    """
+    prohibidos = ("datetime.now(", "date.today(", "datetime.utcnow(", "time.time(")
+    culpables = []
+    for modulo in sorted((RAIZ_REPO / "etl").glob("*.py")):
+        for linea in modulo.read_text(encoding="utf-8").splitlines():
+            # Se saltean comentarios y lineas de docstring: la mencion de
+            # datetime.now() dentro de una explicacion no es una llamada.
+            desnuda = linea.lstrip()
+            if desnuda.startswith(("#", '"', "'")):
+                continue
+            codigo = linea.split("#")[0]
+            for patron in prohibidos:
+                if patron in codigo:
+                    culpables.append("{}: {}".format(modulo.name, patron))
+    assert not culpables, \
+        "lecturas del reloj que vuelven la salida no reproducible: {}".format(culpables)

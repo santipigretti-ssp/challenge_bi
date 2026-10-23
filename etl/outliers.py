@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime
 
 import pandas as pd
 
@@ -25,9 +24,15 @@ def calcular_km_invalido(df: pd.DataFrame) -> pd.Series:
     )
 
 
-def calcular_anio_invalido(df: pd.DataFrame) -> pd.Series:
+def calcular_anio_invalido(df: pd.DataFrame, anio_max: int) -> pd.Series:
+    """anio_max se deriva de los datos (ver main.run), no del reloj.
+
+    Usar el reloj aca hacia que la salida del pipeline dependiera de la
+    fecha de la corrida: anio_invalido alimenta los filtros de elegibilidad
+    del IQR, y de ahi se propaga a precio_outlier, km_outlier, las columnas
+    _limpio, rango_km y tabla_tendencias.
+    """
     anio = df["anio"]
-    anio_max = datetime.now().year + 1
     return anio.isna() | (anio < config.ANIO_MIN) | (anio > anio_max)
 
 
@@ -79,7 +84,7 @@ def agregar_columnas_limpias(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def aplicar_outliers(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+def aplicar_outliers(df: pd.DataFrame, anio_max: int) -> tuple[pd.DataFrame, dict]:
     """Capa 1 (km/anio) y capa 2 (IQR por grupo) sobre results_base completo.
 
     Se corre una sola vez, antes de ramificar a fact_publicaciones y
@@ -90,7 +95,7 @@ def aplicar_outliers(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     """
     df = df.copy()
     df["km_invalido"] = calcular_km_invalido(df)
-    df["anio_invalido"] = calcular_anio_invalido(df)
+    df["anio_invalido"] = calcular_anio_invalido(df, anio_max)
 
     precio_outlier, diag_precio = _flag_outliers_por_grupo(
         df,

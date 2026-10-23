@@ -55,7 +55,10 @@ def run() -> dict:
     df_base["sin_atributos"] = df_base["_tiene_atributos"].isna()
     df_base = df_base.drop(columns="_tiene_atributos")
 
-    df_base, outliers_diag = outliers.aplicar_outliers(df_base)
+    # Umbral de anio derivado de los datos, no del reloj: un auto no puede
+    # ser de un modelo mas de un anio posterior a la ultima captura.
+    anio_max_valido = fecha_max.year + 1
+    df_base, outliers_diag = outliers.aplicar_outliers(df_base, anio_max_valido)
 
     fact_publicaciones = transform_results.deduplicar_por_aviso(df_base).copy()
     fact_publicaciones = transform_results.agregar_rango_km(fact_publicaciones)
