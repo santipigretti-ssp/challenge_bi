@@ -85,7 +85,7 @@ def run() -> dict:
         "dim_modelo": dims["dim_modelo"],
         "dim_transmision": dims["dim_transmision"],
         "dim_fecha": dim_fecha,
-        "dim_fx": dim_fx,
+        "dim_FX": dim_fx,
         "tabla_tendencias": tabla_tendencias,
     }
 
@@ -111,7 +111,7 @@ def run() -> dict:
     }
     validate.print_metricas(metricas)
 
-    load.escribir_csvs({k: v for k, v in tablas.items() if k != "dim_fx"} | {"dim_FX": tablas["dim_fx"]})
+    load.escribir_csvs(tablas)
 
     return metricas
 

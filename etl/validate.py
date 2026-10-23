@@ -1,41 +1,96 @@
 import logging
 
 from etl import tendencias
+from etl.errors import ValidationError
 
 logger = logging.getLogger(__name__)
 
 
+def _avisar_columnas_sin_varianza(fact_publicaciones) -> list:
+    """Loguea las columnas que tienen un solo valor distinto en toda la tabla.
+
+    Nace de accepts_mercadopago, que es el string 'False' en las 124.511 filas
+    crudas: no lleva informacion y se publicaba sin documentar. La columna se
+    conserva por fidelidad al origen, pero ahora el hecho sale a la superficie
+    en cada corrida, y la proxima columna asi se detecta gratis.
+    """
+    avisos = []
+    for columna in fact_publicaciones.columns:
+        if fact_publicaciones[columna].nunique(dropna=False) == 1:
+            valor = fact_publicaciones[columna].iloc[0] if len(fact_publicaciones) else None
+            avisos.append((columna, valor))
+            logger.warning(
+                "columna sin varianza en fact_publicaciones: %s = %r en las %s filas",
+                columna, valor, len(fact_publicaciones),
+            )
+    return avisos
+
+
 def run_asserts(tablas: dict) -> None:
+    """Gate de integridad previo a escribir. Levanta ValidationError si algo falla.
+
+    Antes eran 11 `assert` desnudos, asi que correr con `python -O` saltaba
+    TODA la validacion y escribia igual. Ahora son excepciones explicitas.
+
+    Las fallas se acumulan y se reportan juntas en vez de cortar en la primera:
+    si un cambio de esquema rompe tres invariantes, conviene verlas las tres.
+    """
     fact_publicaciones = tablas["fact_publicaciones"]
     fact_precios_historicos = tablas["fact_precios_historicos"]
     tabla_tendencias = tablas["tabla_tendencias"]
     dim_marca = tablas["dim_marca"]
     dim_modelo = tablas["dim_modelo"]
     dim_transmision = tablas["dim_transmision"]
-    dim_fx = tablas["dim_fx"]
+    dim_fx = tablas["dim_FX"]
 
-    assert fact_publicaciones["id_publicacion"].is_unique, "id_publicacion duplicado en fact_publicaciones"
-    assert dim_marca["id_marca"].is_unique, "id_marca duplicado en dim_marca"
-    assert dim_modelo["id_modelo"].is_unique, "id_modelo duplicado en dim_modelo"
-    assert dim_transmision["id_transmision"].is_unique, "id_transmision duplicado en dim_transmision"
+    fallas: list = []
 
-    assert fact_publicaciones["id_marca"].dropna().isin(dim_marca["id_marca"]).all(), \
-        "id_marca en fact sin match en dim_marca"
-    assert fact_publicaciones["id_modelo"].dropna().isin(dim_modelo["id_modelo"]).all(), \
-        "id_modelo en fact sin match en dim_modelo"
-    assert fact_publicaciones["id_transmision"].dropna().isin(dim_transmision["id_transmision"]).all(), \
-        "id_transmision en fact sin match en dim_transmision"
+    def _check(condicion, mensaje: str) -> None:
+        if not bool(condicion):
+            fallas.append(mensaje)
 
-    assert fact_precios_historicos["id_publicacion"].isin(fact_publicaciones["id_publicacion"]).all(), \
-        "fact_precios_historicos tiene id_publicacion que no existe en fact_publicaciones"
-    assert tabla_tendencias["id_publicacion"].isin(fact_publicaciones["id_publicacion"]).all(), \
-        "tabla_tendencias tiene id_publicacion que no existe en fact_publicaciones"
+    # Unicidad de claves primarias.
+    _check(fact_publicaciones["id_publicacion"].is_unique, "id_publicacion duplicado en fact_publicaciones")
+    _check(dim_marca["id_marca"].is_unique, "id_marca duplicado en dim_marca")
+    _check(dim_modelo["id_modelo"].is_unique, "id_modelo duplicado en dim_modelo")
+    _check(dim_transmision["id_transmision"].is_unique, "id_transmision duplicado en dim_transmision")
+    _check(tabla_tendencias["id_publicacion"].is_unique, "id_publicacion duplicado en tabla_tendencias")
 
-    assert dim_fx.shape[0] == 1, "dim_FX deberia tener exactamente 1 fila"
-    assert dim_fx["usd_oficial"].notna().iloc[0], "dim_FX.usd_oficial es null"
-    assert dim_fx["usd_blue"].notna().iloc[0], "dim_FX.usd_blue es null"
+    # Integridad referencial hacia las dimensiones.
+    _check(fact_publicaciones["id_marca"].dropna().isin(dim_marca["id_marca"]).all(),
+           "id_marca en fact sin match en dim_marca")
+    _check(fact_publicaciones["id_modelo"].dropna().isin(dim_modelo["id_modelo"]).all(),
+           "id_modelo en fact sin match en dim_modelo")
+    _check(fact_publicaciones["id_transmision"].dropna().isin(dim_transmision["id_transmision"]).all(),
+           "id_transmision en fact sin match en dim_transmision")
 
-    logger.info("Todos los asserts duros pasaron OK")
+    # Integridad referencial hacia la tabla de hechos principal.
+    _check(fact_precios_historicos["id_publicacion"].isin(fact_publicaciones["id_publicacion"]).all(),
+           "fact_precios_historicos tiene id_publicacion que no existe en fact_publicaciones")
+    _check(tabla_tendencias["id_publicacion"].isin(fact_publicaciones["id_publicacion"]).all(),
+           "tabla_tendencias tiene id_publicacion que no existe en fact_publicaciones")
+
+    # Cobertura: tabla_tendencias tiene que tener una fila por aviso. Se cumple
+    # por construccion, pero no estaba chequeado.
+    _check(len(tabla_tendencias) == len(fact_publicaciones),
+           "tabla_tendencias tiene {} filas y fact_publicaciones {}".format(
+               len(tabla_tendencias), len(fact_publicaciones)))
+
+    # dim_FX.
+    _check(dim_fx.shape[0] == 1, "dim_FX deberia tener exactamente 1 fila, tiene {}".format(dim_fx.shape[0]))
+    if dim_fx.shape[0] == 1:
+        _check(dim_fx["usd_oficial"].notna().iloc[0], "dim_FX.usd_oficial es null")
+        _check(dim_fx["usd_blue"].notna().iloc[0], "dim_FX.usd_blue es null")
+
+    if fallas:
+        raise ValidationError(
+            "{} validacion(es) fallaron antes de escribir:\n  - {}".format(
+                len(fallas), "\n  - ".join(fallas)
+            )
+        )
+
+    _avisar_columnas_sin_varianza(fact_publicaciones)
+    logger.info("Todas las validaciones duras pasaron OK")
 
 
 def print_metricas(m: dict) -> None:
