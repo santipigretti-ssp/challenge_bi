@@ -1,5 +1,7 @@
 import logging
 
+from etl import tendencias
+
 logger = logging.getLogger(__name__)
 
 
@@ -89,9 +91,19 @@ def print_metricas(m: dict) -> None:
     t = m["tendencias_counts"]
     total_t = sum(t.values())
     print("Tendencias:")
-    for label in ["Subió", "Bajó", "Estable", "Sin precio"]:
-        c = t.get(label, 0)
-        print(f"  {label}: {c:,} ({100*c/total_t:.1f}%)")
+    if total_t == 0:
+        print("  (sin avisos)")
+    else:
+        # Se recorren las etiquetas que realmente aparecieron, ordenadas por
+        # ORDEN_TENDENCIA, en vez de una lista fija: con una lista hardcodeada
+        # una etiqueta nueva no saldria en el reporte.
+        etiquetas = sorted(t, key=lambda label: tendencias.ORDEN_TENDENCIA.get(label, 99))
+        medibles = sum(c for label, c in t.items() if label in tendencias.TENDENCIAS_MEDIBLES)
+        for label in etiquetas:
+            c = t[label]
+            print(f"  {label}: {c:,} ({100*c/total_t:.1f}%)")
+        print(f"  --- medibles (base del split del dashboard): {medibles:,} "
+              f"({100*medibles/total_t:.1f}%)")
     print()
     print(f"Marcas unicas:      {m['marcas_unicas']}")
     print(f"Modelos unicos:     {m['modelos_unicos']}")
