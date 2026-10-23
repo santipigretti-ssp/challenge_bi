@@ -57,6 +57,12 @@ IQR_MIN_AVISOS = 8
 # de 415k/440k/490k, que son plausibles. Con k=3 el techo se iria a ~870k y
 # se escaparian 2 de los 3.
 IQR_GLOBAL_K = 1.5
+# Cuartiles sobre un valor por aviso en vez de sobre todas las capturas.
+# El gate de muestra minima ya cuenta avisos distintos para evitar
+# pseudo-replicacion; sin esto el estimador la reintroducia y un aviso con
+# 70 capturas pesaba 70 veces en Q1/Q3. Queda como flag para poder
+# publicar la fila de sensibilidad del README.
+IQR_COLAPSAR_POR_AVISO = True
 
 # Tendencias
 TENDENCIA_UMBRAL = 0.02

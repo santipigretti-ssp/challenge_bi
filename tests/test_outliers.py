@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from etl import outliers
+from etl import config, outliers
 
 
 # --- calc_iqr_bounds ---
@@ -211,3 +211,41 @@ def test_anio_fuera_de_rango_cae_al_tier_global_no_al_grupo():
     assert viejo["anio_limpio"].isna().all()
     # No contamino el grupo M1/2010 con un anio basura.
     assert diag["precio_outlier"]["grupos_total"] == 1
+
+
+# --- Cuartiles por aviso distinto vs. por captura ---
+
+def test_cuartiles_por_aviso_no_se_dejan_dominar_por_un_aviso_muy_capturado():
+    """Un aviso con muchas capturas no puede fijar el fence del grupo.
+
+    Caso extremo pero real en espiritu: el dataset tiene avisos con 70 capturas
+    y una mediana de 14. Con los cuartiles sobre capturas, el aviso dominante
+    arrastra Q1 y Q3 hacia su propio precio, el fence se cierra alrededor de el
+    y termina marcando como outliers a los avisos NORMALES, dejando pasar al
+    raro. Contando un valor por aviso pasa lo correcto.
+    """
+    normales = [_aviso("N{}".format(i), "M1", 2010, 100_000 + i * 10_000) for i in range(8)]
+    dominante = [_aviso("DOM", "M1", 2010, 500_000) for _ in range(60)]
+    df = pd.DataFrame(normales + dominante)
+
+    original = config.IQR_COLAPSAR_POR_AVISO
+    try:
+        config.IQR_COLAPSAR_POR_AVISO = False
+        por_captura, _ = outliers.aplicar_outliers(df, anio_max=2016)
+
+        config.IQR_COLAPSAR_POR_AVISO = True
+        por_aviso, _ = outliers.aplicar_outliers(df, anio_max=2016)
+    finally:
+        config.IQR_COLAPSAR_POR_AVISO = original
+
+    # Por captura: el fence se cierra sobre 500.000 y los normales caen afuera.
+    assert por_captura.loc[por_captura["id_publicacion"] == "N0", "precio_outlier"].all()
+    assert not por_captura.loc[por_captura["id_publicacion"] == "DOM", "precio_outlier"].any()
+
+    # Por aviso: se marca el raro y los normales quedan limpios.
+    assert por_aviso.loc[por_aviso["id_publicacion"] == "DOM", "precio_outlier"].all()
+    assert not por_aviso.loc[por_aviso["id_publicacion"].str.startswith("N"), "precio_outlier"].any()
+
+
+def test_colapsar_por_aviso_esta_activo_por_defecto():
+    assert config.IQR_COLAPSAR_POR_AVISO is True

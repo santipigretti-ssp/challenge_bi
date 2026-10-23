@@ -47,6 +47,24 @@ def _indices_fuera_del_fence(serie: pd.Series, lower: float, upper: float) -> pd
     return serie.index[_booleana((serie < lower) | (serie > upper))]
 
 
+def _serie_de_referencia(frame: pd.DataFrame, value_col: str) -> pd.Series:
+    """Serie sobre la que se calculan los cuartiles.
+
+    Con IQR_COLAPSAR_POR_AVISO se toma un valor (la mediana) por
+    id_publicacion, en vez de todas las capturas. El gate de muestra minima ya
+    cuenta avisos distintos precisamente para no tratar capturas repetidas del
+    mismo auto como observaciones independientes; calcular los cuartiles sobre
+    las capturas reintroducia esa pseudo-replicacion, y un aviso visto 70 veces
+    pesaba 70 veces en Q1/Q3. Para km es todavia mas degenerado, porque el km
+    es un atributo del auto replicado en cada captura.
+
+    Las filas se marcan igual todas: lo que cambia es de donde sale el fence.
+    """
+    if not config.IQR_COLAPSAR_POR_AVISO:
+        return frame[value_col]
+    return frame.groupby("id_publicacion")[value_col].median()
+
+
 def _flag_outliers(
     df: pd.DataFrame,
     value_col: str,
@@ -97,7 +115,7 @@ def _flag_outliers(
             grupos_sin_muestra += 1
             idx_muestra_chica.extend(grupo.index)
             continue
-        lower, upper = calc_iqr_bounds(grupo[value_col], k_grupo)
+        lower, upper = calc_iqr_bounds(_serie_de_referencia(grupo, value_col), k_grupo)
         flag.loc[_indices_fuera_del_fence(grupo[value_col], lower, upper)] = True
         idx_juzgados.extend(grupo.index)
 
@@ -123,7 +141,7 @@ def _flag_outliers(
     diag["tier_global_por_sin_grupo"] = len(idx_tier2) - len(idx_muestra_chica)
 
     if len(idx_tier2):
-        lower_g, upper_g = calc_iqr_bounds(elegibles[value_col], k_global)
+        lower_g, upper_g = calc_iqr_bounds(_serie_de_referencia(elegibles, value_col), k_global)
         flag.loc[_indices_fuera_del_fence(df.loc[idx_tier2, value_col], lower_g, upper_g)] = True
         diag["fence_global_lower"] = float(lower_g)
         diag["fence_global_upper"] = float(upper_g)
