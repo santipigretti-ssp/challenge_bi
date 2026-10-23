@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from pathlib import Path
 
 ETL_DIR = Path(__file__).resolve().parent
@@ -31,7 +32,11 @@ OUTPUT_ENCODING = "utf-8"
 OUTPUT_DELIMITER = ","
 
 STOP_TIME_FORMAT = "%m/%d/%Y %H:%M:%S"
-EXCEL_EPOCH = "1899-12-30"
+# La fecha de captura sale del serial de Excel que lleva __KEY_results.
+# Era un string sin usar aca y un datetime redefinido en
+# transform_results; ahora hay una sola definicion, en el lugar donde
+# viven los demas parametros.
+EXCEL_EPOCH = datetime(1899, 12, 30)
 
 # Capa 1 - reglas de dominio (piso de precio)
 PRECIO_INVALIDO_ARS_MIN = 1000

@@ -50,11 +50,6 @@ def build_dims(df_attrs: pd.DataFrame) -> dict[str, pd.DataFrame]:
     }
 
 
-def claves_ganadoras(results_base_dedup: pd.DataFrame) -> pd.Series:
-    """__KEY_results de la captura más reciente de cada aviso (ver transform_results.deduplicar_por_aviso)."""
-    return results_base_dedup["__KEY_results"]
-
-
 def _reindexar_como_texto(pivot: pd.DataFrame, columnas: list) -> pd.DataFrame:
     """Fija el esquema del pivot y deja todas las columnas en dtype object.
 
@@ -158,8 +153,9 @@ def build_atributos_pivot(
     results_base_dedup: pd.DataFrame,
     dims: dict[str, pd.DataFrame],
 ) -> pd.DataFrame:
-    claves = claves_ganadoras(results_base_dedup)
-    atributos_pivot = pivotear_attrs(df_attrs, claves)
+    # Las claves ganadoras son las de la captura mas reciente de cada aviso
+    # (ver transform_results.deduplicar_por_aviso).
+    atributos_pivot = pivotear_attrs(df_attrs, results_base_dedup["__KEY_results"])
     atributos_pivot = atributos_pivot.merge(
         results_base_dedup[["__KEY_results", "id_publicacion"]], on="__KEY_results", how="left"
     )

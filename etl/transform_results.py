@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -9,12 +8,10 @@ from etl.errors import requiere_columnas
 
 logger = logging.getLogger(__name__)
 
-EXCEL_EPOCH = datetime(1899, 12, 30)
-
 
 def _serial_a_fecha(key_results: pd.Series) -> pd.Series:
     serial = key_results.str.split("-", n=1).str[0].astype(int)
-    return EXCEL_EPOCH + pd.to_timedelta(serial, unit="D")
+    return config.EXCEL_EPOCH + pd.to_timedelta(serial, unit="D")
 
 
 # __KEY_results tiene la forma {serial}-{offset}-{categoria}-{indice},
