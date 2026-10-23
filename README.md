@@ -311,6 +311,17 @@ Raw inputs are **not** in the repo: `etl/config.py` reads them from `../CSVs/`. 
 
 ## Known limitations
 
+- **38% of listings are re-posts of the same car, and the pipeline does not collapse them.**
+  713 groups share an identical title, price, year and mileage across different listing ids —
+  2,527 listings in all. The largest is 55 copies of one 0 km Vento, posted under near-sequential
+  ids over two weeks: a dealer bulk-reposting inventory. Real inventory is closer to 4,772 cars
+  than 6,586 listings, and the bias is not neutral — dealers re-post more than private sellers, so
+  the average price reads **235,943 over listings vs 212,598 over distinct cars (-10%)** and mean
+  mileage **70,312 vs 81,956 (+17%)**. It is the same class of problem as captures-vs-listings,
+  one level up. Left unfixed deliberately: collapsing them needs a judgment call about what counts
+  as "the same car" without seller data (`seller_contact.csv` was out of scope), and a wrong
+  grouping key would silently merge genuinely different listings. Anything counting inventory off
+  `fact_publicaciones` should be read with this in mind.
 - **Only 3 makes and 3 models.** That's the dataset, not a filter: the scrape covers a single
   MercadoLibre category and that's what was in it.
 - **`accepts_mercadopago` carries no information** — `False` in all 124,511 source rows. Kept for
