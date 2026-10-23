@@ -16,6 +16,19 @@ from etl import config, fx
 MAX_FECHA = date(2015, 12, 21)   # el ultimo mes cerrado es noviembre 2015
 
 
+@pytest.fixture(autouse=True)
+def sin_override(monkeypatch):
+    """Limpia el override de entorno antes de cada test de este modulo.
+
+    Hace falta porque CI exporta ETL_FX_OFICIAL/ETL_FX_BLUE a nivel job para
+    que el pipeline no toque la red. Sin esto, get_fx cortocircuitaria por el
+    override y los tests de la ruta de la API no probarian nada. Los tests del
+    override las vuelven a poner explicitamente.
+    """
+    for variable in ("ETL_FX_OFICIAL", "ETL_FX_BLUE", "ETL_FX_FECHA"):
+        monkeypatch.delenv(variable, raising=False)
+
+
 def _serie(fecha="2015-11-30", venta=10.0):
     return [
         {"fecha": "2015-10-30", "compra": 9.0, "venta": 9.5},

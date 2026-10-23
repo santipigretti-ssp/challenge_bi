@@ -1,0 +1,66 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    env:
+      # CI corre contra el fixture versionado: los CSVs crudos son ~100 MB y
+      # viven fuera del repo, asi que esta es la unica forma de que CI corra.
+      ETL_DATASET: fixture
+      # Tipo de cambio fijo: CI nunca toca la red. Son los valores reales de
+      # nov-2015, asi que los numeros son comparables con una corrida de verdad.
+      ETL_FX_OFICIAL: "10"
+      ETL_FX_BLUE: "15"
+      ETL_FX_FECHA: "2015-11-30"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Instalar dependencias
+        run: pip install -r requirements-dev.txt
+
+      - name: Tests
+        run: pytest -v
+
+      - name: El gate de integridad sigue vivo con -O
+        # Prueba del hallazgo 6 de la auditoria: con 11 assert desnudos,
+        # python -O salteaba toda la validacion antes de escribir.
+        run: python -O -m pytest tests/test_validate.py tests/test_load.py -v
+
+      - name: Correr el ETL end-to-end sobre el fixture
+        run: python main.py
+
+      - name: Verificar que no se uso la red para el tipo de cambio
+        run: |
+          python - <<'PY'
+          import csv, sys
+          with open("data/processed_fixture/dim_FX.csv", encoding="utf-8") as f:
+              fila = next(csv.DictReader(f))
+          print("dim_FX:", fila)
+          if fila["fuente_fx"] != "override":
+              sys.exit("fuente_fx deberia ser 'override', es {!r}".format(fila["fuente_fx"]))
+          PY
+
+      - name: Subir la salida del ETL
+        uses: actions/upload-artifact@v4
+        with:
+          name: data-processed-py${{ matrix.python-version }}
+          path: |
+            data/processed_fixture/
+            etl.log
+          if-no-files-found: error
