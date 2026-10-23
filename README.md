@@ -139,6 +139,32 @@ python main.py
 | `ETL_FX_FECHA` | last day of closed month | Date to record alongside a pinned rate |
 | `ETL_FX_FALLBACK` | off | Allow the hardcoded fallback rate (see the audit table) |
 
+
+### Troubleshooting: `FxError` / SSL handshake failures
+
+If `python main.py` dies with `SSLEOFError` on `api.argentinadatos.com` while `curl` reaches
+the same URL fine, the culprit is almost certainly **the CA bundle sitting on a synced drive**
+(Google Drive, OneDrive, Dropbox). Python reads the file fine, but OpenSSL opens it through a
+different path that those virtual filesystems mishandle — it stalls ~18 s and the handshake
+dies. Copy the bundle somewhere local and point `requests` at it:
+
+```bash
+python -c "import certifi,shutil,pathlib; shutil.copy(certifi.where(), pathlib.Path.home()/'.certifi-cacert.pem')"
+set REQUESTS_CA_BUNDLE=%USERPROFILE%\.certifi-cacert.pem   # Windows
+export REQUESTS_CA_BUNDLE=$HOME/.certifi-cacert.pem          # bash
+```
+
+Diagnosed by elimination: raw `ssl` sockets and `curl` both succeed in 0.4 s (they use the
+Windows certificate store), `verify=False` succeeds, and the *same bytes* copied off the synced
+drive succeed — only the on-drive path fails.
+
+If you just need the pipeline to run, pin the rate instead and skip the call: the run records
+`fuente_fx = override` so the provenance stays honest.
+
+```bash
+ETL_FX_OFICIAL=10 ETL_FX_BLUE=15 ETL_FX_FECHA=2015-11-30 python main.py
+```
+
 ---
 
 ## Data model
