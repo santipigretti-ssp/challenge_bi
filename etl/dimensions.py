@@ -22,8 +22,15 @@ def build_dim_fecha(fecha_min, fecha_max) -> pd.DataFrame:
 
 
 def build_dim_fx(fx: dict) -> pd.DataFrame:
+    """Una fila con la cotizacion usada en la corrida.
+
+    fuente_fx deja el linaje visible EN EL MODELO, no solo en un log: quien
+    abra el dashboard puede ver si el tipo de cambio salio de la API, de un
+    override de entorno o del fallback hardcodeado.
+    """
     return pd.DataFrame([{
         "fecha_fx": fx["fecha_fx"],
         "usd_oficial": fx["usd_oficial"],
         "usd_blue": fx["usd_blue"],
+        "fuente_fx": fx["fuente"],
     }])

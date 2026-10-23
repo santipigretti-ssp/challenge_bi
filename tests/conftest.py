@@ -64,13 +64,36 @@ def dataset_de_test(tmp_path_factory):
 
 @pytest.fixture
 def fx_fijo(monkeypatch):
-    """Tipo de cambio fijo, para que ningun test dependa de la API de FX.
+    """Tipo de cambio fijo por override de entorno, sin tocar la red.
 
-    Son los valores reales de nov-2015, asi los numeros del fixture son
-    comparables con los de una corrida de verdad.
+    Se usa el override (ETL_FX_OFICIAL/ETL_FX_BLUE) en vez de monkeypatchear
+    fx.get_fx: asi el codigo real de get_fx sigue ejecutandose y bajo test, y
+    lo unico que se saltea es la llamada HTTP. Los valores son los reales de
+    nov-2015, asi los numeros del fixture son comparables con una corrida de
+    verdad.
     """
-    from etl import fx
+    monkeypatch.setenv("ETL_FX_OFICIAL", "10")
+    monkeypatch.setenv("ETL_FX_BLUE", "15")
+    monkeypatch.setenv("ETL_FX_FECHA", "2015-11-30")
+    return {
+        "fecha_fx": "2015-11-30",
+        "usd_oficial": 10.0,
+        "usd_blue": 15.0,
+        "fuente": "override",
+    }
 
-    valores = {"fecha_fx": "2015-11-30", "usd_oficial": 10.0, "usd_blue": 15.0}
-    monkeypatch.setattr(fx, "get_fx", lambda max_fecha_captura: dict(valores))
-    return valores
+
+@pytest.fixture(autouse=True)
+def sin_red(monkeypatch):
+    """Ningun test puede llegar a la red por accidente.
+
+    Si un test olvida fx_fijo y el codigo intenta un GET, falla con un mensaje
+    claro en vez de colgarse 50 segundos contra la API real.
+    """
+    def _bloqueado(*args, **kwargs):
+        raise AssertionError(
+            "un test intento una llamada HTTP: {}. Usa el fixture fx_fijo.".format(args[:1])
+        )
+
+    monkeypatch.setattr("requests.get", _bloqueado)
+    monkeypatch.setattr("requests.sessions.Session.request", _bloqueado)

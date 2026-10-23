@@ -72,7 +72,11 @@ FX_API_URL = "https://api.argentinadatos.com/v1/cotizaciones/dolares/{casa}"
 FX_CASAS = ("oficial", "blue")
 FX_TIMEOUT_SECONDS = 10
 FX_RETRIES = 2
-# Fallback si la API falla (ultimo valor conocido al cierre de este proyecto, nov-2015)
+# Fallback si la API falla (ultimo valor conocido al cierre de este proyecto,
+# nov-2015). Deshabilitado por defecto: estos valores coinciden con los que
+# devuelve la API real, asi que usarlos en silencio volvia invisible
+# cualquier falla. Se habilita con ETL_FX_FALLBACK=1.
 FX_FALLBACK = {"oficial": 10.0, "blue": 15.0}
+FX_FALLBACK_HABILITADO = os.getenv("ETL_FX_FALLBACK", "").strip() in ("1", "true", "True")
 
 LOG_FILE = PROJECT_DIR / "etl.log"

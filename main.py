@@ -3,6 +3,8 @@ import time
 
 from etl import config, dimensions, extract, fx, load, outliers, tendencias, transform_attrs, transform_results, validate
 
+logger = logging.getLogger(__name__)
+
 FACT_PUBLICACIONES_COLUMNAS = [
     "id_publicacion", "title", "permalink", "condition", "currency_id", "category_id",
     "listing_type_id", "accepts_mercadopago", "stop_time", "fecha_pub",
@@ -22,15 +24,29 @@ FACT_PRECIOS_HISTORICOS_COLUMNAS = [
 
 
 def setup_logging() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        handlers=[logging.StreamHandler(), logging.FileHandler(config.LOG_FILE, mode="w")],
-    )
+    """Configura logging a stderr y a etl.log, una sola vez.
+
+    mode="a", no "w": el log se truncaba en cada corrida, asi que la evidencia
+    de una falla (por ejemplo de la API de FX) se perdia en la corrida
+    siguiente. El banner separa las corridas.
+
+    Es idempotente y se llama desde run(), asi la ruta de logging tambien se
+    ejercita en los tests; antes solo corria bajo __main__ y todos los
+    logger.warning del pipeline se descartaban durante la suite.
+    """
+    raiz = logging.getLogger()
+    if not any(isinstance(h, logging.FileHandler) for h in raiz.handlers):
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+            handlers=[logging.StreamHandler(), logging.FileHandler(config.LOG_FILE, mode="a")],
+        )
 
 
 def run() -> dict:
+    setup_logging()
     t0 = time.time()
+    logger.info("===== corrida: dataset=%s =====", config.DATASET)
 
     df_results = extract.read_results()
     df_attrs = extract.read_attributes()
@@ -117,5 +133,4 @@ def run() -> dict:
 
 
 if __name__ == "__main__":
-    setup_logging()
     run()
