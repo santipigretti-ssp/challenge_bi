@@ -48,6 +48,15 @@ ANIO_MIN = 1910
 # Capa 2 - IQR por grupo (id_modelo, anio)
 IQR_GROUP_K = 1.5
 IQR_MIN_AVISOS = 8
+# Capa 2 - fence global, para las filas que no caen en ningun grupo con
+# muestra suficiente (sin modelo/anio, o grupo chico). Mismo k que el de
+# grupo a proposito: no es una constante nueva que haya que justificar, es
+# el mismo fence de Tukey sobre otra poblacion de referencia. Sobre el
+# dataset completo da un techo de ~550.000 ARS, que marca los 3 precios
+# extremos de los avisos sin atributos (790k, 790k, 850k) y deja pasar los
+# de 415k/440k/490k, que son plausibles. Con k=3 el techo se iria a ~870k y
+# se escaparian 2 de los 3.
+IQR_GLOBAL_K = 1.5
 
 # Tendencias
 TENDENCIA_UMBRAL = 0.02

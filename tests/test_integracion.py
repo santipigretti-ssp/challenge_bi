@@ -76,6 +76,34 @@ def test_pipeline_conserva_los_avisos_sin_atributos(fx_fijo):
     assert sin_attrs["price_ars"].notna().any()
 
 
+def test_los_avisos_sin_atributos_si_pueden_ser_outliers(fx_fijo):
+    """Antes no podian serlo por construccion, y los precios extremos del
+    dataset entraban limpios a price_ars_limpio. Ver etl.outliers._flag_outliers."""
+    metricas = main.run()
+    fp = metricas["fact_publicaciones"]
+    diag = metricas["outliers_diag"]["precio_outlier"]
+
+    sin_attrs = fp[fp["sin_atributos"]]
+    assert int(sin_attrs["precio_outlier"].sum()) > 0, (
+        "ningun sin_atributos marcado: el tier global no esta actuando"
+    )
+
+    # El fence global se calculo y las filas sin grupo pasaron por el.
+    assert diag["fence_global_upper"] is not None
+    assert diag["tier_global_por_sin_grupo"] > 0
+
+    # Lo que importa: ningun aviso sin atributos conserva en price_ars_limpio
+    # un precio por encima del fence global. Antes ahi quedaban los extremos.
+    limpios_sin_attrs = sin_attrs["price_ars_limpio"].dropna()
+    assert (limpios_sin_attrs <= diag["fence_global_upper"]).all()
+
+
+def test_km_no_tiene_tier_global(fx_fijo):
+    diag = main.run()["outliers_diag"]["km_outlier"]
+    assert diag["fence_global_upper"] is None
+    assert diag["tier_global_filas"] == 0
+
+
 def test_pipeline_cubre_todos_los_avisos_en_tendencias(fx_fijo):
     metricas = main.run()
     fp = metricas["fact_publicaciones"]
