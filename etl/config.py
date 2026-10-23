@@ -1,14 +1,29 @@
+import os
 from pathlib import Path
 
 ETL_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = ETL_DIR.parent
 CHALLENGE_DIR = PROJECT_DIR.parent
 
-RAW_DATA_DIR = CHALLENGE_DIR / "CSVs"
-PROCESSED_DIR = PROJECT_DIR / "data" / "processed"
+# Que dataset leer. "completo" apunta a los CSVs crudos, que viven FUERA del
+# repo (son ~100 MB); "fixture" apunta a la muestra estratificada versionada en
+# tests/fixtures/, que es con la que corren los tests y CI.
+DATASET = os.getenv("ETL_DATASET", "completo").strip().lower()
+if DATASET not in ("completo", "fixture"):
+    raise ValueError(
+        "ETL_DATASET invalido: " + repr(DATASET) + ". Valores validos: completo, fixture"
+    )
 
-RESULTS_CSV = RAW_DATA_DIR / "results.csv"
-ATTRIBUTES_CSV = RAW_DATA_DIR / "attributes.csv"
+if DATASET == "fixture":
+    RAW_DATA_DIR = PROJECT_DIR / "tests" / "fixtures"
+    RESULTS_CSV = RAW_DATA_DIR / "results_sample.csv"
+    ATTRIBUTES_CSV = RAW_DATA_DIR / "attributes_sample.csv"
+    PROCESSED_DIR = PROJECT_DIR / "data" / "processed_fixture"
+else:
+    RAW_DATA_DIR = CHALLENGE_DIR / "CSVs"
+    RESULTS_CSV = RAW_DATA_DIR / "results.csv"
+    ATTRIBUTES_CSV = RAW_DATA_DIR / "attributes.csv"
+    PROCESSED_DIR = PROJECT_DIR / "data" / "processed"
 
 RAW_ENCODING = "utf-8-sig"
 RAW_DELIMITER = ";"

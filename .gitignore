@@ -7,3 +7,4 @@ data/processed/*.csv
 data/processed/_manifest.json
 etl.log
 *.pbix
+data/processed_fixture/
